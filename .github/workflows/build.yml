@@ -11,8 +11,55 @@ permissions:
   contents: read
 
 jobs:
+  source-tarball:
+    name: Source Tarball
+    runs-on: macos-26
+    steps:
+      - name: Check out repository with submodules
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Apply vendor patches
+        run: |
+          sh vendor/apply_7zip_patches.sh vendor/7zip
+          sh vendor/apply_7zip_patches.sh vendor/7zip-zstd
+
+      - name: Install build tools
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Snapshot build metadata
+        run: |
+          commit_count="$(git rev-list --count HEAD)"
+          short_hash="$(git rev-parse --short HEAD)"
+          printf 'BUILD_COMMIT_COUNT="%s"\nBUILD_SHORT_HASH="%s"\n' \
+            "$commit_count" "$short_hash" > .build-metadata
+
+      - name: Strip .git directories and files
+        run: find . -name '.git*' -exec rm -rf {} +
+
+      - name: Create source tarball
+        run: |
+          repo_name="shichizip"
+          short_sha="${GITHUB_SHA::7}"
+          gtar -czf "$RUNNER_TEMP/${repo_name}-${short_sha}-source.tar.gz" \
+            --transform "s,^\.,${repo_name}-${short_sha}," \
+            .
+
+      - name: Upload source tarball
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/shichizip-*-source.tar.gz
+          if-no-files-found: error
+          archive: false
+
   macos-build:
     name: Build and Test (${{ matrix.artifact_prefix }}, ${{ matrix.target_arch }})
+    needs: source-tarball
     runs-on: macos-26
     environment: development
     strategy:
@@ -49,11 +96,17 @@ jobs:
       XCODE_CONFIGURATION: Debug
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - name: Download source tarball
+        uses: actions/download-artifact@v8
         with:
-          fetch-depth: 0
-          submodules: recursive
+          pattern: shichizip-*-source.tar.gz
+          path: ${{ runner.temp }}/source
+          skip-decompress: true
+
+      - name: Extract source tarball
+        run: |
+          tarball="$(ls "$RUNNER_TEMP"/source/shichizip-*-source.tar.gz)"
+          tar -xzf "$tarball" --strip-components=1
 
       - name: Set up Zig
         uses: mlugg/setup-zig@v2
@@ -62,9 +115,6 @@ jobs:
         with:
           version: 0.16.0
           cache-key: ${{ matrix.zig_variant }}-${{ matrix.zig_target }}
-
-      - name: Install build tools
-        run: brew install xcodegen
 
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app/Contents/Developer
@@ -85,9 +135,6 @@ jobs:
             -p build \
             --summary all \
             --verbose
-
-      - name: Generate Xcode project
-        run: xcodegen generate
 
       - name: Configure signing mode
         id: signing
