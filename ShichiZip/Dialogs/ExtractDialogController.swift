@@ -226,7 +226,7 @@ final class ExtractDialogController: NSObject {
         self.sourceArchiveAvailableForQuarantineInheritance = sourceArchiveAvailableForQuarantineInheritance
     }
 
-    func runModal(for _: NSWindow?) -> ExtractDialogResult? {
+    func runModal(for parentWindow: NSWindow?) -> ExtractDialogResult? {
         let pathModeOptions = makePathModeOptions()
         let overwriteModeOptions = makeOverwriteModeOptions()
         var selectedPath = suggestedDestinationURL.path
@@ -416,7 +416,7 @@ final class ExtractDialogController: NSObject {
                 self.passwordContainerView = nil
             }
 
-            guard controller.runModal() == 1 else {
+            guard controller.runModal(for: parentWindow) == 1 else {
                 return nil
             }
 

@@ -369,11 +369,6 @@ static uint32_t SZDialogRoundUpByteCountToGB(uint64_t byteCount) {
     NSString* title = error.localizedDescription.length > 0 ? error.localizedDescription : SZLocalizedString(@"common.ok");
     NSString* message = [self errorDetailsForError:error];
     SZDialogStyle style = SZDialogStyleCritical;
-    BOOL useDedicatedPopup = NO;
-    if ([error.domain isEqualToString:SZArchiveErrorDomain] && error.code == SZArchiveErrorCodeWrongPassword) {
-        style = SZDialogStyleWarning;
-        useDedicatedPopup = YES;
-    }
 
     SZModalDialogController* controller = [[SZModalDialogController alloc] initWithStyle:style
                                                                                    title:title
@@ -382,11 +377,7 @@ static uint32_t SZDialogRoundUpByteCountToGB(uint64_t byteCount) {
                                                                            accessoryView:nil
                                                                  preferredFirstResponder:nil
                                                                        cancelButtonIndex:0];
-    if (window && !useDedicatedPopup) {
-        [controller beginSheetModalForWindow:window completionHandler:^(__unused NSInteger selectedButtonIndex) { }];
-    } else {
-        [controller runModal];
-    }
+    [controller runModal];
 }
 
 + (void)presentMessageWithStyle:(SZDialogStyle)style

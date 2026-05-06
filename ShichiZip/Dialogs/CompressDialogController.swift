@@ -1323,7 +1323,7 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                 self.advancedOptionsSummaryLabel = nil
             }
 
-            guard controller.runModal() == 1 else {
+            guard controller.runModal(for: parentWindow) == 1 else {
                 return nil
             }
 
@@ -1778,7 +1778,7 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                                                  accessoryView: wrapper,
                                                  preferredFirstResponder: nil,
                                                  cancelButtonIndex: 0)
-        guard controller.runModal() == 1 else {
+        guard controller.runModal(for: currentDialogWindow) == 1 else {
             return nil
         }
 

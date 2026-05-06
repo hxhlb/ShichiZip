@@ -361,6 +361,13 @@ static NSString* SZModalDialogAppDisplayName(void) {
     self.contentController.dialogButtons[(NSUInteger)index].enabled = enabled;
 }
 
+- (void)activatePreferredFirstResponder {
+    NSView* firstResponder = self.contentController.preferredFirstResponderView;
+    if (firstResponder) {
+        [self.window makeFirstResponder:firstResponder];
+    }
+}
+
 - (void)beginSheetModalForWindow:(NSWindow*)window
                completionHandler:(SZModalDialogCompletionHandler)completionHandler {
     self.selfRetainer = self;
@@ -376,10 +383,26 @@ static NSString* SZModalDialogAppDisplayName(void) {
             self.selfRetainer = nil;
         }];
 
-    NSView* firstResponder = self.contentController.preferredFirstResponderView;
-    if (firstResponder) {
-        [self.window makeFirstResponder:firstResponder];
-    }
+    [self activatePreferredFirstResponder];
+}
+
+- (NSInteger)runSheetModalForWindow:(NSWindow*)window {
+    self.selfRetainer = self;
+    __block NSInteger selectedButtonIndex = self.cancelButtonIndex;
+
+    [window beginSheet:self.window
+        completionHandler:^(__unused NSModalResponse returnCode) {
+            selectedButtonIndex = self.selectedButtonIndex;
+            [NSApp stopModalWithCode:NSModalResponseOK + selectedButtonIndex];
+            self.selfRetainer = nil;
+        }];
+
+    [self activatePreferredFirstResponder];
+    [NSApp runModalForWindow:self.window];
+
+    NSInteger buttonIndex = selectedButtonIndex;
+    self.selfRetainer = nil;
+    return buttonIndex;
 }
 
 - (NSInteger)runModal {
@@ -387,10 +410,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
 
-    NSView* firstResponder = self.contentController.preferredFirstResponderView;
-    if (firstResponder) {
-        [self.window makeFirstResponder:firstResponder];
-    }
+    [self activatePreferredFirstResponder];
 
     [NSApp runModalForWindow:self.window];
     [self.window orderOut:nil];
@@ -398,6 +418,14 @@ static NSString* SZModalDialogAppDisplayName(void) {
     NSInteger buttonIndex = self.selectedButtonIndex;
     self.selfRetainer = nil;
     return buttonIndex;
+}
+
+- (NSInteger)runModalForWindow:(NSWindow*)window {
+    if (window) {
+        return [self runSheetModalForWindow:window];
+    }
+
+    return [self runModal];
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)sender {

@@ -24,14 +24,22 @@ typedef void(NS_SWIFT_UI_ACTOR ^ SZModalDialogCompletionHandler)(NSInteger selec
       preferredFirstResponder:(nullable NSView*)preferredFirstResponder
             cancelButtonIndex:(NSInteger)cancelButtonIndex;
 
+// Presents as a sheet and returns immediately; the result is delivered in the completion handler.
 - (void)beginSheetModalForWindow:(NSWindow*)window
                completionHandler:(SZModalDialogCompletionHandler)completionHandler;
+
+// Presents as a sheet but blocks in AppKit's modal loop until the sheet ends, matching runModal's return style.
+- (NSInteger)runSheetModalForWindow:(NSWindow*)window;
+
+// Presents as a standalone modal window and blocks until it closes.
+- (NSInteger)runModal;
+
+// Presents as a blocking sheet when a parent window is provided; otherwise falls back to runModal.
+- (NSInteger)runModalForWindow:(nullable NSWindow*)window;
 
 - (void)finishWithButtonIndex:(NSInteger)buttonIndex;
 
 - (void)setButtonEnabled:(BOOL)enabled atIndex:(NSInteger)index;
-
-- (NSInteger)runModal;
 
 @end
 
