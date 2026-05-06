@@ -1,4 +1,4 @@
-import Foundation
+import Cocoa
 
 enum FileManagerArchiveOpenMode {
     case defaultBehavior
@@ -80,12 +80,14 @@ enum FileManagerArchiveOpenService {
                                   hostDirectory: URL,
                                   temporaryDirectory: URL?,
                                   displayPathPrefix: String,
+                                  parentWindow: NSWindow? = nil,
                                   nestedWriteBackInfo: FileManagerNestedArchiveWriteBackInfo? = nil,
                                   openMode: FileManagerArchiveOpenMode = .defaultBehavior) -> FileManagerPreparedArchiveOpenResult
     {
         do {
-            return try ArchiveOperationRunner.runSynchronously(operationTitle: "Opening archive...",
+            return try ArchiveOperationRunner.runSynchronously(operationTitle: SZL10n.string("progress.opening"),
                                                                initialFileName: displayPathPrefix,
+                                                               parentWindow: parentWindow,
                                                                deferredDisplay: true)
             { session in
                 prepareArchiveOpen(url: url,

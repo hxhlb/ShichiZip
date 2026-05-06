@@ -4585,6 +4585,7 @@ extension FileManagerPaneController {
                                                                              hostDirectory: paneHostDirectory,
                                                                              temporaryDirectory: temporaryDirectory,
                                                                              displayPathPrefix: resolvedDisplayPathPrefix,
+                                                                             parentWindow: view.window,
                                                                              nestedWriteBackInfo: nestedWriteBackInfo,
                                                                              openMode: openMode)
 
