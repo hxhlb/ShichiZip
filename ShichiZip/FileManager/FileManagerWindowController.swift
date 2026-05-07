@@ -1,5 +1,4 @@
 import Cocoa
-import os
 
 func szPresentTransferAncestryConflict(_ conflict: FileManagerTransferPathValidation.Conflict,
                                        move: Bool,
@@ -36,10 +35,6 @@ func szPresentTransferArchiveSelfConflict(move: Bool,
                      message: SZL10n.string("app.fileManager.chooseDifferentArchive"),
                      style: .warning,
                      for: window)
-}
-
-extension Notification.Name {
-    static let fileManagerViewPreferencesDidChange = Notification.Name("FileManagerViewPreferencesDidChange")
 }
 
 @MainActor
@@ -120,152 +115,6 @@ private func szNormalizedDestinationDisplayPath(_ path: String) -> String {
     return path.hasSuffix("/") ? path : path + "/"
 }
 
-enum FileManagerViewPreferences {
-    private static let fixedFormatFormatterCache = OSAllocatedUnfairLock(initialState: [String: DateFormatter]())
-    private static let styleFormatterCache = OSAllocatedUnfairLock(initialState: [String: DateFormatter]())
-
-    enum TimestampDisplayLevel: Int, CaseIterable {
-        case day
-        case minute
-        case second
-        case ntfs
-        case nanoseconds
-
-        fileprivate var dateFormat: String {
-            switch self {
-            case .day:
-                "yyyy-MM-dd"
-            case .minute:
-                "yyyy-MM-dd HH:mm"
-            case .second:
-                "yyyy-MM-dd HH:mm:ss"
-            case .ntfs:
-                "yyyy-MM-dd HH:mm:ss.SSSSSSS"
-            case .nanoseconds:
-                "yyyy-MM-dd HH:mm:ss.SSSSSSSSS"
-            }
-        }
-    }
-
-    private static var defaults: UserDefaults {
-        .standard
-    }
-
-    private static let timestampUTCKey = "FileManager.TimestampUTC"
-    private static let timestampLevelKey = "FileManager.TimestampLevel"
-    private static let autoRefreshKey = "FileManager.AutoRefresh"
-
-    static var usesUTCTimestamps: Bool {
-        bool(forKey: timestampUTCKey, defaultValue: false)
-    }
-
-    static var timestampDisplayLevel: TimestampDisplayLevel {
-        TimestampDisplayLevel(rawValue: integer(forKey: timestampLevelKey,
-                                                defaultValue: TimestampDisplayLevel.minute.rawValue)) ?? .minute
-    }
-
-    static var autoRefreshEnabled: Bool {
-        bool(forKey: autoRefreshKey, defaultValue: false)
-    }
-
-    static func setUsesUTCTimestamps(_ value: Bool) {
-        set(value, forKey: timestampUTCKey)
-    }
-
-    static func setTimestampDisplayLevel(_ value: TimestampDisplayLevel) {
-        set(value.rawValue, forKey: timestampLevelKey)
-    }
-
-    static func setAutoRefreshEnabled(_ value: Bool) {
-        set(value, forKey: autoRefreshKey)
-    }
-
-    static func timeMenuPreviewTitle(for level: TimestampDisplayLevel, referenceDate: Date = Date()) -> String {
-        makeFixedFormatFormatter(format: level.dateFormat).string(from: referenceDate)
-    }
-
-    static func makeListDateFormatter() -> DateFormatter {
-        makeFixedFormatFormatter(format: timestampDisplayLevel.dateFormat)
-    }
-
-    static func makeDateFormatter(dateStyle: DateFormatter.Style,
-                                  timeStyle: DateFormatter.Style) -> DateFormatter
-    {
-        let usesUTC = usesUTCTimestamps
-        let cacheKey = "\(dateStyle.rawValue)|\(timeStyle.rawValue)|\(usesUTC ? 1 : 0)"
-        return cachedFormatter(forKey: cacheKey, in: styleFormatterCache) {
-            let formatter = DateFormatter()
-            formatter.dateStyle = dateStyle
-            formatter.timeStyle = timeStyle
-            formatter.timeZone = usesUTC ? TimeZone(secondsFromGMT: 0) : .current
-            return formatter
-        }
-    }
-
-    private static func set(_ value: Bool, forKey key: String) {
-        defaults.set(value, forKey: key)
-        resetFormatterCaches()
-        NotificationCenter.default.post(name: .fileManagerViewPreferencesDidChange, object: nil)
-    }
-
-    private static func set(_ value: Int, forKey key: String) {
-        defaults.set(value, forKey: key)
-        resetFormatterCaches()
-        NotificationCenter.default.post(name: .fileManagerViewPreferencesDidChange, object: nil)
-    }
-
-    private static func bool(forKey key: String, defaultValue: Bool) -> Bool {
-        guard defaults.object(forKey: key) != nil else {
-            return defaultValue
-        }
-        return defaults.bool(forKey: key)
-    }
-
-    private static func integer(forKey key: String, defaultValue: Int) -> Int {
-        guard defaults.object(forKey: key) != nil else {
-            return defaultValue
-        }
-        return defaults.integer(forKey: key)
-    }
-
-    private static func makeFixedFormatFormatter(format: String) -> DateFormatter {
-        let usesUTC = usesUTCTimestamps
-        let cacheKey = "\(format)|\(usesUTC ? 1 : 0)"
-        return cachedFormatter(forKey: cacheKey, in: fixedFormatFormatterCache) {
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = format
-            formatter.timeZone = usesUTC ? TimeZone(secondsFromGMT: 0) : .current
-            return formatter
-        }
-    }
-
-    private static func resetFormatterCaches() {
-        fixedFormatFormatterCache.withLock { $0.removeAll() }
-        styleFormatterCache.withLock { $0.removeAll() }
-    }
-
-    private static func cachedFormatter(forKey key: String,
-                                        in cache: OSAllocatedUnfairLock<[String: DateFormatter]>,
-                                        builder: @Sendable () -> DateFormatter) -> DateFormatter
-    {
-        // DateFormatter is mutable and not thread-safe, so the cache stores
-        // prototypes and each caller gets an independent copy.
-        cache.withLock { store in
-            let formatter: DateFormatter
-            if let cached = store[key] {
-                formatter = cached
-            } else {
-                let created = builder()
-                store[key] = created
-                formatter = created
-            }
-            return formatter.copy() as! DateFormatter
-        }
-    }
-}
-
 private enum FileManagerHashAlgorithm {
     case all
     case crc32
@@ -342,75 +191,6 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
 
         static func setShowsDualPane(_ value: Bool) {
             defaults.set(value, forKey: dualPaneKey)
-        }
-
-        private static func bool(forKey key: String, defaultValue: Bool) -> Bool {
-            guard defaults.object(forKey: key) != nil else {
-                return defaultValue
-            }
-            return defaults.bool(forKey: key)
-        }
-    }
-
-    private enum ToolbarPreferences {
-        enum Style: String {
-            case expanded
-            case unified
-
-            var toolbarStyle: NSWindow.ToolbarStyle {
-                switch self {
-                case .expanded:
-                    .expanded
-                case .unified:
-                    .unified
-                }
-            }
-        }
-
-        private static var defaults: UserDefaults {
-            .standard
-        }
-
-        private static let archiveToolbarKey = "FileManager.ShowArchiveToolbar"
-        private static let standardToolbarKey = "FileManager.ShowStandardToolbar"
-        private static let showTextKey = "FileManager.ToolbarShowButtonText"
-        private static let styleKey = "FileManager.ToolbarStyle"
-
-        static var showsArchiveToolbar: Bool {
-            bool(forKey: archiveToolbarKey, defaultValue: true)
-        }
-
-        static var showsStandardToolbar: Bool {
-            bool(forKey: standardToolbarKey, defaultValue: true)
-        }
-
-        static var showsButtonText: Bool {
-            bool(forKey: showTextKey, defaultValue: true)
-        }
-
-        static var style: Style {
-            guard let rawValue = defaults.string(forKey: styleKey),
-                  let style = Style(rawValue: rawValue)
-            else {
-                return .expanded
-            }
-            return style
-        }
-
-        static func setShowsArchiveToolbar(_ value: Bool) {
-            defaults.set(value, forKey: archiveToolbarKey)
-        }
-
-        static func setShowsStandardToolbar(_ value: Bool) {
-            defaults.set(value, forKey: standardToolbarKey)
-        }
-
-        static func setShowsButtonText(_ value: Bool) {
-            defaults.set(value, forKey: showTextKey)
-        }
-
-        static func setStyle(_ style: Style) {
-            defaults.set(style.rawValue, forKey: styleKey)
         }
 
         private static func bool(forKey key: String, defaultValue: Bool) -> Bool {
@@ -592,7 +372,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     }
 
     private func setupToolbar() {
-        guard ToolbarPreferences.showsArchiveToolbar || ToolbarPreferences.showsStandardToolbar else {
+        guard FileManagerToolbarPreferences.showsArchiveToolbar || FileManagerToolbarPreferences.showsStandardToolbar else {
             toolbar = nil
             window?.toolbar = nil
             return
@@ -601,79 +381,21 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         let newToolbar = NSToolbar(identifier: "FileManagerToolbar")
         newToolbar.delegate = self
         toolbar = newToolbar
-        window?.toolbarStyle = ToolbarPreferences.style.toolbarStyle
+        window?.toolbarStyle = FileManagerToolbarPreferences.style.toolbarStyle
         window?.toolbar = newToolbar
         applyToolbarPresentation()
     }
 
     private func applyToolbarPresentation() {
         guard let toolbar else { return }
-        toolbar.displayMode = ToolbarPreferences.showsButtonText ? .iconAndLabel : .iconOnly
-        window?.toolbarStyle = ToolbarPreferences.style.toolbarStyle
+        toolbar.displayMode = FileManagerToolbarPreferences.showsButtonText ? .iconAndLabel : .iconOnly
+        window?.toolbarStyle = FileManagerToolbarPreferences.style.toolbarStyle
         refreshToolbarItemPresentation()
         toolbar.validateVisibleItems()
     }
 
-    private func toolbarImage(systemSymbolName name: String,
-                              accessibilityDescription: String) -> NSImage?
-    {
-        NSImage(systemSymbolName: name, accessibilityDescription: accessibilityDescription)
-    }
-
     private func refreshToolbarItemPresentation() {
         toolbar?.items.forEach(configureToolbarItem(_:))
-    }
-
-    private func configureToolbarItem(_ item: NSToolbarItem) {
-        item.target = self
-        item.isBordered = true
-
-        switch item.itemIdentifier {
-        case Self.addItem:
-            item.label = SZL10n.string("toolbar.add")
-            item.toolTip = SZL10n.string("toolbar.add")
-            item.image = toolbarImage(systemSymbolName: "plus.circle", accessibilityDescription: SZL10n.string("toolbar.add"))
-            item.action = #selector(addToArchive(_:))
-
-        case Self.extractItem:
-            item.label = SZL10n.string("toolbar.extract")
-            item.toolTip = SZL10n.string("toolbar.extract")
-            item.image = toolbarImage(systemSymbolName: "tray.and.arrow.up", accessibilityDescription: SZL10n.string("toolbar.extract"))
-            item.action = #selector(extractArchive(_:))
-
-        case Self.testItem:
-            item.label = SZL10n.string("toolbar.test")
-            item.toolTip = SZL10n.string("toolbar.test")
-            item.image = toolbarImage(systemSymbolName: "checkmark.seal", accessibilityDescription: SZL10n.string("toolbar.test"))
-            item.action = #selector(testArchive(_:))
-
-        case Self.copyItem:
-            item.label = SZL10n.string("toolbar.copy")
-            item.toolTip = SZL10n.string("toolbar.copy")
-            item.image = toolbarImage(systemSymbolName: "doc.on.doc", accessibilityDescription: SZL10n.string("toolbar.copy"))
-            item.action = #selector(copyFiles(_:))
-
-        case Self.moveItem:
-            item.label = SZL10n.string("toolbar.move")
-            item.toolTip = SZL10n.string("toolbar.move")
-            item.image = toolbarImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: SZL10n.string("toolbar.move"))
-            item.action = #selector(moveFiles(_:))
-
-        case Self.deleteItem:
-            item.label = SZL10n.string("toolbar.delete")
-            item.toolTip = SZL10n.string("toolbar.delete")
-            item.image = toolbarImage(systemSymbolName: "trash", accessibilityDescription: SZL10n.string("toolbar.delete"))
-            item.action = #selector(deleteFiles(_:))
-
-        case Self.infoItem:
-            item.label = SZL10n.string("toolbar.info")
-            item.toolTip = SZL10n.string("toolbar.info")
-            item.image = toolbarImage(systemSymbolName: "info.circle", accessibilityDescription: SZL10n.string("toolbar.info"))
-            item.action = #selector(showProperties(_:))
-
-        default:
-            item.isBordered = false
-        }
     }
 
     private func observeViewPreferences() {
@@ -1392,22 +1114,22 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     }
 
     @objc func toggleArchiveToolbar(_: Any?) {
-        ToolbarPreferences.setShowsArchiveToolbar(!ToolbarPreferences.showsArchiveToolbar)
+        FileManagerToolbarPreferences.setShowsArchiveToolbar(!FileManagerToolbarPreferences.showsArchiveToolbar)
         setupToolbar()
     }
 
     @objc func toggleStandardToolbar(_: Any?) {
-        ToolbarPreferences.setShowsStandardToolbar(!ToolbarPreferences.showsStandardToolbar)
+        FileManagerToolbarPreferences.setShowsStandardToolbar(!FileManagerToolbarPreferences.showsStandardToolbar)
         setupToolbar()
     }
 
     @objc func toggleToolbarButtonText(_: Any?) {
-        ToolbarPreferences.setShowsButtonText(!ToolbarPreferences.showsButtonText)
+        FileManagerToolbarPreferences.setShowsButtonText(!FileManagerToolbarPreferences.showsButtonText)
         applyToolbarPresentation()
     }
 
     @objc func toggleUnifiedToolbarStyle(_: Any?) {
-        ToolbarPreferences.setStyle(ToolbarPreferences.style == .unified ? .expanded : .unified)
+        FileManagerToolbarPreferences.setStyle(FileManagerToolbarPreferences.style == .unified ? .expanded : .unified)
         applyToolbarPresentation()
     }
 
@@ -1794,13 +1516,13 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         case #selector(toggleAutoRefresh(_:)):
             menuItem.state = FileManagerViewPreferences.autoRefreshEnabled ? .on : .off
         case #selector(toggleArchiveToolbar(_:)):
-            menuItem.state = ToolbarPreferences.showsArchiveToolbar ? .on : .off
+            menuItem.state = FileManagerToolbarPreferences.showsArchiveToolbar ? .on : .off
         case #selector(toggleStandardToolbar(_:)):
-            menuItem.state = ToolbarPreferences.showsStandardToolbar ? .on : .off
+            menuItem.state = FileManagerToolbarPreferences.showsStandardToolbar ? .on : .off
         case #selector(toggleToolbarButtonText(_:)):
-            menuItem.state = ToolbarPreferences.showsButtonText ? .on : .off
+            menuItem.state = FileManagerToolbarPreferences.showsButtonText ? .on : .off
         case #selector(toggleUnifiedToolbarStyle(_:)):
-            menuItem.state = ToolbarPreferences.style == .unified ? .on : .off
+            menuItem.state = FileManagerToolbarPreferences.style == .unified ? .on : .off
         default:
             menuItem.state = .off
         }
@@ -2285,55 +2007,6 @@ private extension FileManagerShortcutCommand {
         case .refreshActivePane:
             #selector(FileManagerWindowController.refreshActivePane(_:))
         }
-    }
-}
-
-// MARK: - NSToolbarDelegate
-
-extension FileManagerWindowController: NSToolbarDelegate {
-    static let addItem = NSToolbarItem.Identifier("fm_add")
-    static let extractItem = NSToolbarItem.Identifier("fm_extract")
-    static let testItem = NSToolbarItem.Identifier("fm_test")
-    static let copyItem = NSToolbarItem.Identifier("fm_copy")
-    static let moveItem = NSToolbarItem.Identifier("fm_move")
-    static let deleteItem = NSToolbarItem.Identifier("fm_delete")
-    static let infoItem = NSToolbarItem.Identifier("fm_info")
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-                 willBeInsertedIntoToolbar _: Bool) -> NSToolbarItem?
-    {
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-
-        guard toolbarAllowedItemIdentifiers(toolbar).contains(itemIdentifier) else {
-            return nil
-        }
-
-        configureToolbarItem(item)
-
-        return item
-    }
-
-    func toolbarDefaultItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
-        var identifiers: [NSToolbarItem.Identifier] = []
-
-        if ToolbarPreferences.showsArchiveToolbar {
-            identifiers.append(contentsOf: [Self.addItem, Self.extractItem, Self.testItem])
-        }
-
-        if ToolbarPreferences.showsStandardToolbar {
-            if !identifiers.isEmpty {
-                identifiers.append(.space)
-            }
-            identifiers.append(contentsOf: [Self.copyItem, Self.moveItem, Self.deleteItem, Self.infoItem])
-        }
-
-        return identifiers
-    }
-
-    func toolbarAllowedItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.addItem, Self.extractItem, Self.testItem,
-         Self.copyItem, Self.moveItem, Self.deleteItem, Self.infoItem,
-         .space, .flexibleSpace]
     }
 }
 
