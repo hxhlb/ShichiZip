@@ -4580,12 +4580,17 @@ extension FileManagerPaneController {
     {
         let paneHostDirectory = hostDirectory ?? archiveHostDirectory()
         let resolvedDisplayPathPrefix = displayPathPrefix ?? url.path
+        let progressParentWindow: NSWindow? = if let window = view.window, window.isVisible {
+            window
+        } else {
+            nil
+        }
 
         let preparedResult = FileManagerArchiveOpenService.openSynchronously(url: url,
                                                                              hostDirectory: paneHostDirectory,
                                                                              temporaryDirectory: temporaryDirectory,
                                                                              displayPathPrefix: resolvedDisplayPathPrefix,
-                                                                             parentWindow: view.window,
+                                                                             parentWindow: progressParentWindow,
                                                                              nestedWriteBackInfo: nestedWriteBackInfo,
                                                                              openMode: openMode)
 
