@@ -228,10 +228,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !sourceURLs.isEmpty else { return }
 
         let parentWindow = NSApp.keyWindow ?? NSApp.mainWindow
-        let dialog = CompressDialogController(sourceURLs: sourceURLs)
-        guard let result = dialog.runModal(for: parentWindow) else { return }
-
         Task { @MainActor in
+            let dialog = CompressDialogController(sourceURLs: sourceURLs)
+            guard let result = await dialog.runModal(for: parentWindow) else { return }
+
             do {
                 try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("progress.compressing"),
                                                      parentWindow: parentWindow)

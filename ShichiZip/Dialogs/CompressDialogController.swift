@@ -891,6 +891,7 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                                                             timePrecision: AdvancedTimePrecisionState(isSet: false,
                                                                                                       value: SZCompressionTimePrecision(rawValue: -1)!))
     private var advancedOptionsWereCustomized = false
+    private var isPresentingAdvancedOptions = false
 
     init(sourceURLs: [URL],
          baseDirectory: URL? = nil,
@@ -914,7 +915,7 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
         super.init()
     }
 
-    func runModal(for parentWindow: NSWindow?) -> CompressDialogResult? {
+    func runModal(for parentWindow: NSWindow?) async -> CompressDialogResult? {
         guard !availableFormats.isEmpty else {
             szPresentMessage(title: "No Archive Formats Available",
                              message: "7-Zip did not report any writable archive formats.",
@@ -1323,7 +1324,7 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                 self.advancedOptionsSummaryLabel = nil
             }
 
-            guard controller.runModal(for: parentWindow) == 1 else {
+            guard await controller.modalResult(for: parentWindow) == 1 else {
                 return nil
             }
 
@@ -1480,28 +1481,37 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
     }
 
     @objc private func showAdvancedOptions(_: Any?) {
-        guard let format = selectedFormatOption() else {
-            return
-        }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  !isPresentingAdvancedOptions,
+                  let format = selectedFormatOption()
+            else {
+                return
+            }
 
-        let initialState = effectiveAdvancedOptions(for: format,
-                                                    method: selectedMethodOption(),
-                                                    baseState: advancedOptionsState).state
-        guard let updatedState = runAdvancedOptionsModal(for: format,
-                                                         method: selectedMethodOption(),
-                                                         initialState: initialState)
-        else {
-            return
-        }
+            isPresentingAdvancedOptions = true
+            defer { isPresentingAdvancedOptions = false }
 
-        advancedOptionsState = updatedState
-        advancedOptionsWereCustomized = true
-        refreshAdvancedOptionsSummary()
+            let method = selectedMethodOption()
+            let initialState = effectiveAdvancedOptions(for: format,
+                                                        method: method,
+                                                        baseState: advancedOptionsState).state
+            guard let updatedState = await runAdvancedOptionsModal(for: format,
+                                                                   method: method,
+                                                                   initialState: initialState)
+            else {
+                return
+            }
+
+            advancedOptionsState = updatedState
+            advancedOptionsWereCustomized = true
+            refreshAdvancedOptionsSummary()
+        }
     }
 
     private func runAdvancedOptionsModal(for format: FormatOption,
                                          method: MethodOption?,
-                                         initialState: AdvancedOptionsState) -> AdvancedOptionsState?
+                                         initialState: AdvancedOptionsState) async -> AdvancedOptionsState?
     {
         let baseCapabilities = baseAdvancedOptionsCapabilities(for: format,
                                                                methodName: method?.methodName)
@@ -1778,7 +1788,9 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                                                  accessoryView: wrapper,
                                                  preferredFirstResponder: nil,
                                                  cancelButtonIndex: 0)
-        guard controller.runModal(for: currentDialogWindow) == 1 else {
+        let buttonIndex = await controller.modalResult(for: currentDialogWindow)
+        withExtendedLifetime(refreshHandler) {}
+        guard buttonIndex == 1 else {
             return nil
         }
 

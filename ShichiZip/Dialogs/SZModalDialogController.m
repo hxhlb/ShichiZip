@@ -386,25 +386,6 @@ static NSString* SZModalDialogAppDisplayName(void) {
     [self activatePreferredFirstResponder];
 }
 
-- (NSInteger)runSheetModalForWindow:(NSWindow*)window {
-    self.selfRetainer = self;
-    __block NSInteger selectedButtonIndex = self.cancelButtonIndex;
-
-    [window beginSheet:self.window
-        completionHandler:^(__unused NSModalResponse returnCode) {
-            selectedButtonIndex = self.selectedButtonIndex;
-            [NSApp stopModalWithCode:NSModalResponseOK + selectedButtonIndex];
-            self.selfRetainer = nil;
-        }];
-
-    [self activatePreferredFirstResponder];
-    [NSApp runModalForWindow:self.window];
-
-    NSInteger buttonIndex = selectedButtonIndex;
-    self.selfRetainer = nil;
-    return buttonIndex;
-}
-
 - (NSInteger)runModal {
     self.selfRetainer = self;
     [self.window center];
@@ -418,14 +399,6 @@ static NSString* SZModalDialogAppDisplayName(void) {
     NSInteger buttonIndex = self.selectedButtonIndex;
     self.selfRetainer = nil;
     return buttonIndex;
-}
-
-- (NSInteger)runModalForWindow:(NSWindow*)window {
-    if (window) {
-        return [self runSheetModalForWindow:window];
-    }
-
-    return [self runModal];
 }
 
 - (BOOL)windowShouldClose:(NSWindow*)sender {

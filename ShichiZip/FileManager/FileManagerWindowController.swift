@@ -1074,12 +1074,24 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         let selectedURLs = activePane.selectedFileURLs()
         guard !selectedURLs.isEmpty else { return }
 
-        let compressDialog = CompressDialogController(sourceURLs: selectedURLs,
-                                                      baseDirectory: activePane.currentDirectoryURL)
-        guard let result = compressDialog.runModal(for: window) else { return }
+        let baseDirectory = activePane.currentDirectoryURL
+        let parentWindow = window
 
-        Task { @MainActor [weak self] in
-            guard let self, let parentWindow = window else { return }
+        Task { @MainActor [weak self, weak activePane] in
+            guard let self,
+                  let activePane
+            else {
+                return
+            }
+
+            let compressDialog = CompressDialogController(sourceURLs: selectedURLs,
+                                                          baseDirectory: baseDirectory)
+            guard let result = await compressDialog.runModal(for: parentWindow),
+                  let parentWindow
+            else {
+                return
+            }
+
             do {
                 try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("progress.compressing"),
                                                      parentWindow: parentWindow)
@@ -1101,13 +1113,19 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         let activePane = activePane
         guard activePane.canExtractSelectionOrArchive() else { return }
 
-        guard let extractResult = promptForArchiveDestination(from: activePane) else { return }
-        let sourceArchiveURL = activePane.sourceArchiveURLForPostProcessing()
-        let isVirtualLocation = activePane.isVirtualLocation
-        let archiveCandidateURL = isVirtualLocation ? nil : activePane.selectedArchiveCandidateURL()
+        Task { @MainActor [weak self, weak activePane] in
+            guard let self,
+                  let activePane,
+                  let extractResult = await promptForArchiveDestination(from: activePane),
+                  let parentWindow = window
+            else {
+                return
+            }
 
-        Task { @MainActor [weak self] in
-            guard let self, let parentWindow = window else { return }
+            let sourceArchiveURL = activePane.sourceArchiveURLForPostProcessing()
+            let isVirtualLocation = activePane.isVirtualLocation
+            let archiveCandidateURL = isVirtualLocation ? nil : activePane.selectedArchiveCandidateURL()
+
             do {
                 if isVirtualLocation {
                     let prepared = try activePane.prepareExtraction(to: extractResult.destinationURL,
@@ -1956,7 +1974,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         return szNormalizedDestinationDisplayPath(sourcePane.currentDirectoryURL.standardizedFileURL.path)
     }
 
-    private func promptForArchiveDestination(from sourcePane: FileManagerPaneController) -> ExtractDialogResult? {
+    private func promptForArchiveDestination(from sourcePane: FileManagerPaneController) async -> ExtractDialogResult? {
         let dialog = ExtractDialogController(suggestedDestinationURL: sourcePane.currentDirectoryURL,
                                              baseDirectory: sourcePane.currentDirectoryURL,
                                              message: extractDialogInfoText(for: sourcePane),
@@ -1965,7 +1983,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
                                              suggestedSplitDestinationName: sourcePane.suggestedExtractDestinationName,
                                              sourceArchiveAvailableForMoveToTrash: sourcePane.sourceArchiveURLForPostProcessing() != nil,
                                              sourceArchiveAvailableForQuarantineInheritance: sourcePane.quarantineSourceArchiveURLForExtraction() != nil)
-        return dialog.runModal(for: window)
+        return await dialog.runModal(for: window)
     }
 
     private func extractDialogInfoText(for sourcePane: FileManagerPaneController) -> String {

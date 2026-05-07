@@ -79,6 +79,21 @@ func szPromptForPasswordSync(title: String,
 }
 
 @MainActor
+extension SZModalDialogController {
+    func modalResult(for window: NSWindow?) async -> Int {
+        guard let window else {
+            return runModal()
+        }
+
+        return await withCheckedContinuation { continuation in
+            beginSheetModal(for: window) { buttonIndex in
+                continuation.resume(returning: buttonIndex)
+            }
+        }
+    }
+}
+
+@MainActor
 func szBeginConfirmation(on window: NSWindow,
                          title: String,
                          message: String,
