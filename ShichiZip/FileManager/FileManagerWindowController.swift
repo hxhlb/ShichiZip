@@ -735,10 +735,25 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         activePane.openSelection()
     }
 
+    @objc func toggleQuickLook(_: Any?) {
+        quickLookPanelController.togglePreview(for: activePane,
+                                               currentController: self,
+                                               showError: quickLookErrorReporter())
+    }
+
     private func quickLookErrorReporter() -> @MainActor (Error) -> Void {
         { [weak self] error in
             self?.showErrorAlert(error)
         }
+    }
+
+    private func performShortcutCommand(_ command: FileManagerShortcutCommand,
+                                        from pane: FileManagerPaneController) -> Bool
+    {
+        setActivePane(pane)
+        return NSApp.sendAction(command.fileManagerWindowAction,
+                                to: self,
+                                from: nil)
     }
 
     // MARK: - Actions
@@ -2244,6 +2259,35 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     }
 }
 
+private extension FileManagerShortcutCommand {
+    var fileManagerWindowAction: Selector {
+        switch self {
+        case .openSelectedItem:
+            #selector(FileManagerWindowController.openSelectedItem(_:))
+        case .toggleQuickLook:
+            #selector(FileManagerWindowController.toggleQuickLook(_:))
+        case .goUpOneLevel:
+            #selector(FileManagerWindowController.goUpOneLevel(_:))
+        case .renameSelection:
+            #selector(FileManagerWindowController.renameSelection(_:))
+        case .switchPanes:
+            #selector(FileManagerWindowController.switchPanes(_:))
+        case .copyFiles:
+            #selector(FileManagerWindowController.copyFiles(_:))
+        case .moveFiles:
+            #selector(FileManagerWindowController.moveFiles(_:))
+        case .createFolder:
+            #selector(FileManagerWindowController.createFolder(_:))
+        case .deleteFiles:
+            #selector(FileManagerWindowController.deleteFiles(_:))
+        case .toggleDualPane:
+            #selector(FileManagerWindowController.toggleDualPane(_:))
+        case .refreshActivePane:
+            #selector(FileManagerWindowController.refreshActivePane(_:))
+        }
+    }
+}
+
 // MARK: - NSToolbarDelegate
 
 extension FileManagerWindowController: NSToolbarDelegate {
@@ -2329,35 +2373,7 @@ extension FileManagerWindowController: FileManagerPaneDelegate {
     }
 
     func pane(_ pane: FileManagerPaneController, didRequestShortcutCommand command: FileManagerShortcutCommand) -> Bool {
-        setActivePane(pane)
-
-        switch command {
-        case .openSelectedItem:
-            openSelectedItem(nil)
-        case .toggleQuickLook:
-            quickLookPanelController.togglePreview(for: pane,
-                                                   currentController: self,
-                                                   showError: quickLookErrorReporter())
-        case .goUpOneLevel:
-            goUpOneLevel(nil)
-        case .renameSelection:
-            renameSelection(nil)
-        case .switchPanes:
-            switchPanes(nil)
-        case .copyFiles:
-            copyFiles(nil)
-        case .moveFiles:
-            moveFiles(nil)
-        case .createFolder:
-            createFolder(nil)
-        case .deleteFiles:
-            deleteFiles(nil)
-        case .toggleDualPane:
-            toggleDualPane(nil)
-        case .refreshActivePane:
-            refreshActivePane(nil)
-        }
-
-        return true
+        performShortcutCommand(command,
+                               from: pane)
     }
 }
