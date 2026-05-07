@@ -3,34 +3,11 @@ import Cocoa
 /// Dual-pane file manager window replicating 7-Zip File Manager
 @MainActor
 class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserInterfaceValidations, NSMenuItemValidation {
-    private enum PanePreferences {
-        private static var defaults: UserDefaults {
-            .standard
-        }
-
-        private static let dualPaneKey = "FileManager.IsDualPane"
-
-        static var showsDualPane: Bool {
-            bool(forKey: dualPaneKey, defaultValue: false)
-        }
-
-        static func setShowsDualPane(_ value: Bool) {
-            defaults.set(value, forKey: dualPaneKey)
-        }
-
-        private static func bool(forKey key: String, defaultValue: Bool) -> Bool {
-            guard defaults.object(forKey: key) != nil else {
-                return defaultValue
-            }
-            return defaults.bool(forKey: key)
-        }
-    }
-
     private var splitView: NSSplitView!
     private var leftPane: FileManagerPaneController!
     private var rightPane: FileManagerPaneController!
     private var toolbar: NSToolbar!
-    private var isDualPane = PanePreferences.showsDualPane
+    private var isDualPane = FileManagerPanePreferences.showsDualPane
     private weak var trackedActivePane: FileManagerPaneController?
     private var viewPreferencesObserver: NSObjectProtocol?
     private var languageObserver: NSObjectProtocol?
@@ -347,7 +324,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
             }
 
             isDualPane = false
-            PanePreferences.setShowsDualPane(false)
+            FileManagerPanePreferences.setShowsDualPane(false)
             rightPane.view.removeFromSuperview()
             pendingEvenSplitLayout = false
             if wasRightPaneActive {
@@ -355,7 +332,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
             }
         } else {
             isDualPane = true
-            PanePreferences.setShowsDualPane(true)
+            FileManagerPanePreferences.setShowsDualPane(true)
             splitView.addArrangedSubview(rightPane.view)
             rightPane.reactivateIfSuspended()
             scheduleEvenSplitLayout()

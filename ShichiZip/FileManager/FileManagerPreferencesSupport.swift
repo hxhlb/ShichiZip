@@ -1,8 +1,114 @@
-import Foundation
+import AppKit
 import os
 
 extension Notification.Name {
     static let fileManagerViewPreferencesDidChange = Notification.Name("FileManagerViewPreferencesDidChange")
+}
+
+enum FileManagerPreferenceStore {
+    private static var defaults: UserDefaults {
+        .standard
+    }
+
+    static func bool(forKey key: String, defaultValue: Bool) -> Bool {
+        guard defaults.object(forKey: key) != nil else {
+            return defaultValue
+        }
+        return defaults.bool(forKey: key)
+    }
+
+    static func integer(forKey key: String, defaultValue: Int) -> Int {
+        guard defaults.object(forKey: key) != nil else {
+            return defaultValue
+        }
+        return defaults.integer(forKey: key)
+    }
+
+    static func string(forKey key: String) -> String? {
+        defaults.string(forKey: key)
+    }
+
+    static func set(_ value: Bool, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    static func set(_ value: Int, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    static func set(_ value: String, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+}
+
+enum FileManagerPanePreferences {
+    private static let dualPaneKey = "FileManager.IsDualPane"
+
+    static var showsDualPane: Bool {
+        FileManagerPreferenceStore.bool(forKey: dualPaneKey, defaultValue: false)
+    }
+
+    static func setShowsDualPane(_ value: Bool) {
+        FileManagerPreferenceStore.set(value, forKey: dualPaneKey)
+    }
+}
+
+enum FileManagerToolbarPreferences {
+    enum Style: String {
+        case expanded
+        case unified
+
+        var toolbarStyle: NSWindow.ToolbarStyle {
+            switch self {
+            case .expanded:
+                .expanded
+            case .unified:
+                .unified
+            }
+        }
+    }
+
+    private static let archiveToolbarKey = "FileManager.ShowArchiveToolbar"
+    private static let standardToolbarKey = "FileManager.ShowStandardToolbar"
+    private static let showTextKey = "FileManager.ToolbarShowButtonText"
+    private static let styleKey = "FileManager.ToolbarStyle"
+
+    static var showsArchiveToolbar: Bool {
+        FileManagerPreferenceStore.bool(forKey: archiveToolbarKey, defaultValue: true)
+    }
+
+    static var showsStandardToolbar: Bool {
+        FileManagerPreferenceStore.bool(forKey: standardToolbarKey, defaultValue: true)
+    }
+
+    static var showsButtonText: Bool {
+        FileManagerPreferenceStore.bool(forKey: showTextKey, defaultValue: true)
+    }
+
+    static var style: Style {
+        guard let rawValue = FileManagerPreferenceStore.string(forKey: styleKey),
+              let style = Style(rawValue: rawValue)
+        else {
+            return .expanded
+        }
+        return style
+    }
+
+    static func setShowsArchiveToolbar(_ value: Bool) {
+        FileManagerPreferenceStore.set(value, forKey: archiveToolbarKey)
+    }
+
+    static func setShowsStandardToolbar(_ value: Bool) {
+        FileManagerPreferenceStore.set(value, forKey: standardToolbarKey)
+    }
+
+    static func setShowsButtonText(_ value: Bool) {
+        FileManagerPreferenceStore.set(value, forKey: showTextKey)
+    }
+
+    static func setStyle(_ style: Style) {
+        FileManagerPreferenceStore.set(style.rawValue, forKey: styleKey)
+    }
 }
 
 enum FileManagerViewPreferences {
@@ -32,25 +138,21 @@ enum FileManagerViewPreferences {
         }
     }
 
-    private static var defaults: UserDefaults {
-        .standard
-    }
-
     private static let timestampUTCKey = "FileManager.TimestampUTC"
     private static let timestampLevelKey = "FileManager.TimestampLevel"
     private static let autoRefreshKey = "FileManager.AutoRefresh"
 
     static var usesUTCTimestamps: Bool {
-        bool(forKey: timestampUTCKey, defaultValue: false)
+        FileManagerPreferenceStore.bool(forKey: timestampUTCKey, defaultValue: false)
     }
 
     static var timestampDisplayLevel: TimestampDisplayLevel {
-        TimestampDisplayLevel(rawValue: integer(forKey: timestampLevelKey,
-                                                defaultValue: TimestampDisplayLevel.minute.rawValue)) ?? .minute
+        TimestampDisplayLevel(rawValue: FileManagerPreferenceStore.integer(forKey: timestampLevelKey,
+                                                                           defaultValue: TimestampDisplayLevel.minute.rawValue)) ?? .minute
     }
 
     static var autoRefreshEnabled: Bool {
-        bool(forKey: autoRefreshKey, defaultValue: false)
+        FileManagerPreferenceStore.bool(forKey: autoRefreshKey, defaultValue: false)
     }
 
     static func setUsesUTCTimestamps(_ value: Bool) {
@@ -88,29 +190,15 @@ enum FileManagerViewPreferences {
     }
 
     private static func set(_ value: Bool, forKey key: String) {
-        defaults.set(value, forKey: key)
+        FileManagerPreferenceStore.set(value, forKey: key)
         resetFormatterCaches()
         NotificationCenter.default.post(name: .fileManagerViewPreferencesDidChange, object: nil)
     }
 
     private static func set(_ value: Int, forKey key: String) {
-        defaults.set(value, forKey: key)
+        FileManagerPreferenceStore.set(value, forKey: key)
         resetFormatterCaches()
         NotificationCenter.default.post(name: .fileManagerViewPreferencesDidChange, object: nil)
-    }
-
-    private static func bool(forKey key: String, defaultValue: Bool) -> Bool {
-        guard defaults.object(forKey: key) != nil else {
-            return defaultValue
-        }
-        return defaults.bool(forKey: key)
-    }
-
-    private static func integer(forKey key: String, defaultValue: Int) -> Int {
-        guard defaults.object(forKey: key) != nil else {
-            return defaultValue
-        }
-        return defaults.integer(forKey: key)
     }
 
     private static func makeFixedFormatFormatter(format: String) -> DateFormatter {
