@@ -58,9 +58,9 @@ final class FoldersHistoryWindowController: NSObject, NSTableViewDataSource, NST
         tableView.selectRowIndexes(entries.isEmpty ? [] : IndexSet(integer: 0), byExtendingSelection: false)
 
         let controller = SZModalDialogController(style: .informational,
-                                                 title: "Folders History",
+                                                 title: SZL10n.string("properties.foldersHistory"),
                                                  message: nil,
-                                                 buttonTitles: ["Cancel", "Open"],
+                                                 buttonTitles: [SZL10n.string("common.cancel"), SZL10n.string("menu.open")],
                                                  accessoryView: accessoryView,
                                                  preferredFirstResponder: tableView,
                                                  cancelButtonIndex: ButtonIndex.cancel)
@@ -163,8 +163,8 @@ final class FoldersHistoryWindowController: NSObject, NSTableViewDataSource, NST
         controlsRow.alignment = .centerY
         controlsRow.spacing = 8
 
-        deleteButton = NSButton(title: "Delete", target: self, action: #selector(deleteSelection(_:)))
-        clearButton = NSButton(title: "Clear", target: self, action: #selector(clearHistory(_:)))
+        deleteButton = NSButton(title: SZL10n.string("menu.delete"), target: self, action: #selector(deleteSelection(_:)))
+        clearButton = NSButton(title: SZL10n.string("app.settings.clear"), target: self, action: #selector(clearHistory(_:)))
 
         deleteButton.setAccessibilityIdentifier("foldersHistory.deleteButton")
         clearButton.setAccessibilityIdentifier("foldersHistory.clearButton")
@@ -194,7 +194,7 @@ final class FoldersHistoryWindowController: NSObject, NSTableViewDataSource, NST
         tableView.setAccessibilityIdentifier("foldersHistory.tableView")
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("path"))
-        column.title = "Folder"
+        column.title = SZL10n.string("column.folders")
         column.width = 560
         tableView.addTableColumn(column)
 
@@ -227,7 +227,7 @@ final class FoldersHistoryWindowController: NSObject, NSTableViewDataSource, NST
         clearButton?.isEnabled = !entries.isEmpty
         dialogController?.setButtonEnabled(hasSelection, at: ButtonIndex.open)
 
-        let itemLabel = entries.count == 1 ? "folder" : "folders"
+        let itemLabel = entries.count == 1 ? SZL10n.string("app.fileManager.statusFolder") : SZL10n.string("app.fileManager.statusFolders")
         statusLabel?.stringValue = "\(entries.count) \(itemLabel)"
     }
 

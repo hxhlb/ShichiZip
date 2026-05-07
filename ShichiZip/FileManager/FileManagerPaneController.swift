@@ -9,10 +9,19 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     private struct StatusSummary {
         let fileCount: Int
         let folderCount: Int
-        let totalSize: UInt64
+        let fileSize: UInt64
+        let folderSize: UInt64
 
         var itemCount: Int {
             fileCount + folderCount
+        }
+
+        var totalSize: UInt64 {
+            fileSize
+        }
+
+        var copyDialogTotalSize: UInt64 {
+            fileSize + folderSize
         }
     }
 
@@ -405,6 +414,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             MainActor.assumeIsolated {
                 self?.refreshColumnTitles()
                 self?.tableView.menu = self?.buildContextMenu()
+                self?.updateStatusBar()
             }
         }
 
@@ -1231,19 +1241,26 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     func selectedItemNames(limit: Int? = nil) -> [String] {
-        let paneItems = selectedRealPaneItems()
-        let visibleItems = limit.map { Array(paneItems.prefix($0)) } ?? paneItems
+        itemDisplayNames(for: selectedRealPaneItems(), limit: limit)
+    }
 
-        return visibleItems.compactMap {
-            switch $0 {
-            case let .filesystem(item):
-                item.name
-            case let .archive(item):
-                item.name
-            case .parent:
-                nil
-            }
+    func extractDialogInfoText(previewItemLimit: Int = 5) -> String {
+        guard isInsideArchive else {
+            return selectedItemsInfoText(previewItemLimit: previewItemLimit)
         }
+
+        let paneItems = paneItemsForSelectionOrDisplayedItems()
+        var lines = copyDialogSummaryLines(for: makeStatusSummary(for: paneItems))
+        if !lines.isEmpty {
+            lines.append("")
+        }
+
+        lines.append(currentLocationDisplayPath)
+        appendItemPreview(for: paneItems,
+                          to: &lines,
+                          limit: previewItemLimit,
+                          appendingDirectorySeparators: true)
+        return lines.joined(separator: "\n")
     }
 
     func prepareQuickLookPreviewForFileSystem() throws -> FileManagerQuickLookPreparedPreview? {
@@ -1613,45 +1630,52 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     private func makeStatusSummary(for fileSystemItems: [FileSystemItem]) -> StatusSummary {
         var fileCount = 0
         var folderCount = 0
-        var totalSize: UInt64 = 0
+        var fileSize: UInt64 = 0
+        var folderSize: UInt64 = 0
 
         for item in fileSystemItems {
             if item.isDirectory {
                 folderCount += 1
+                folderSize += item.size
             } else {
                 fileCount += 1
-                totalSize += item.size
+                fileSize += item.size
             }
         }
 
         return StatusSummary(fileCount: fileCount,
                              folderCount: folderCount,
-                             totalSize: totalSize)
+                             fileSize: fileSize,
+                             folderSize: folderSize)
     }
 
     private func makeStatusSummary(for archiveItems: [ArchiveItem]) -> StatusSummary {
         var fileCount = 0
         var folderCount = 0
-        var totalSize: UInt64 = 0
+        var fileSize: UInt64 = 0
+        var folderSize: UInt64 = 0
 
         for item in archiveItems {
             if item.isDirectory {
                 folderCount += 1
+                folderSize += item.size
             } else {
                 fileCount += 1
-                totalSize += item.size
+                fileSize += item.size
             }
         }
 
         return StatusSummary(fileCount: fileCount,
                              folderCount: folderCount,
-                             totalSize: totalSize)
+                             fileSize: fileSize,
+                             folderSize: folderSize)
     }
 
     private func makeStatusSummary(for paneItems: [PaneItem]) -> StatusSummary {
         var fileCount = 0
         var folderCount = 0
-        var totalSize: UInt64 = 0
+        var fileSize: UInt64 = 0
+        var folderSize: UInt64 = 0
 
         for paneItem in paneItems {
             switch paneItem {
@@ -1660,34 +1684,63 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             case let .archive(item):
                 if item.isDirectory {
                     folderCount += 1
+                    folderSize += item.size
                 } else {
                     fileCount += 1
-                    totalSize += item.size
+                    fileSize += item.size
                 }
             case let .filesystem(item):
                 if item.isDirectory {
                     folderCount += 1
+                    folderSize += item.size
                 } else {
                     fileCount += 1
-                    totalSize += item.size
+                    fileSize += item.size
                 }
             }
         }
 
         return StatusSummary(fileCount: fileCount,
                              folderCount: folderCount,
-                             totalSize: totalSize)
+                             fileSize: fileSize,
+                             folderSize: folderSize)
+    }
+
+    private func copyDialogSummaryLines(for summary: StatusSummary) -> [String] {
+        var lines: [String] = []
+        if summary.folderCount > 0 {
+            lines.append(copyDialogValuePairLine(title: SZL10n.string("column.folders"),
+                                                 count: summary.folderCount,
+                                                 size: summary.folderSize))
+        }
+        if summary.fileCount > 0 {
+            lines.append(copyDialogValuePairLine(title: SZL10n.string("column.files"),
+                                                 count: summary.fileCount,
+                                                 size: summary.fileSize))
+        }
+        if summary.folderSize > 0, summary.fileSize > 0 {
+            lines.append("\(SZL10n.string("column.size")): \(fileSizeString(summary.copyDialogTotalSize))")
+        }
+        return lines
+    }
+
+    private func copyDialogValuePairLine(title: String, count: Int, size: UInt64) -> String {
+        "\(title): \(count)    ( \(fileSizeString(size)) )"
+    }
+
+    private func fileSizeString(_ size: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: size), countStyle: .file)
     }
 
     private func makeSummaryText(_ summary: StatusSummary) -> String {
-        let sizeString = ByteCountFormatter.string(fromByteCount: Int64(summary.totalSize), countStyle: .file)
+        let sizeString = fileSizeString(summary.totalSize)
         let fileWord = summary.fileCount == 1 ? SZL10n.string("app.fileManager.statusFile") : SZL10n.string("app.fileManager.statusFiles")
         let folderWord = summary.folderCount == 1 ? SZL10n.string("app.fileManager.statusFolder") : SZL10n.string("app.fileManager.statusFolders")
         return "\(summary.fileCount) \(fileWord), \(summary.folderCount) \(folderWord) — \(sizeString)"
     }
 
     private func makeSelectedSummaryText(_ summary: StatusSummary) -> String {
-        let sizeString = ByteCountFormatter.string(fromByteCount: Int64(summary.totalSize), countStyle: .file)
+        let sizeString = fileSizeString(summary.totalSize)
         let fileWord = summary.fileCount == 1 ? SZL10n.string("app.fileManager.statusFile") : SZL10n.string("app.fileManager.statusFiles")
         let folderWord = summary.folderCount == 1 ? SZL10n.string("app.fileManager.statusFolder") : SZL10n.string("app.fileManager.statusFolders")
 
@@ -2304,9 +2357,62 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         }
     }
 
+    private func paneItemsForSelectionOrDisplayedItems() -> [PaneItem] {
+        let selectedItems = selectedRealPaneItems()
+        if !selectedItems.isEmpty {
+            return selectedItems
+        }
+        return isInsideArchive ? archiveDisplayItems.map(PaneItem.archive) : []
+    }
+
     private func archiveItemsForSelectionOrDisplayedItems() -> [ArchiveItem] {
         let selectedItems = selectedArchiveItems()
         return selectedItems.isEmpty ? archiveDisplayItems : selectedItems
+    }
+
+    private func selectedItemsInfoText(previewItemLimit: Int) -> String {
+        var lines: [String] = []
+        lines.append(currentLocationDisplayPath)
+        appendItemPreview(for: selectedRealPaneItems(), to: &lines, limit: previewItemLimit)
+        return lines.joined(separator: "\n")
+    }
+
+    private func appendItemPreview(for paneItems: [PaneItem],
+                                   to lines: inout [String],
+                                   limit: Int,
+                                   appendingDirectorySeparators: Bool = false)
+    {
+        let names = itemDisplayNames(for: paneItems,
+                                     limit: limit,
+                                     appendingDirectorySeparators: appendingDirectorySeparators)
+        lines.append(contentsOf: names.map { "  \($0)" })
+        if paneItems.count > names.count {
+            lines.append("  ...")
+        }
+    }
+
+    private func itemDisplayNames(for paneItems: [PaneItem],
+                                  limit: Int? = nil,
+                                  appendingDirectorySeparators: Bool = false) -> [String]
+    {
+        let visibleItems = limit.map { Array(paneItems.prefix($0)) } ?? paneItems
+        return visibleItems.compactMap { itemDisplayName(for: $0, appendingDirectorySeparator: appendingDirectorySeparators) }
+    }
+
+    private func itemDisplayName(for paneItem: PaneItem, appendingDirectorySeparator: Bool) -> String? {
+        switch paneItem {
+        case .parent:
+            nil
+        case let .filesystem(item):
+            itemDisplayName(item.name, isDirectory: item.isDirectory, appendingDirectorySeparator: appendingDirectorySeparator)
+        case let .archive(item):
+            itemDisplayName(item.name, isDirectory: item.isDirectory, appendingDirectorySeparator: appendingDirectorySeparator)
+        }
+    }
+
+    private func itemDisplayName(_ name: String, isDirectory: Bool, appendingDirectorySeparator: Bool) -> String {
+        guard appendingDirectorySeparator, isDirectory, !name.hasSuffix("/") else { return name }
+        return name + "/"
     }
 
     private func currentArchiveDisplayPathPrefix() -> String {

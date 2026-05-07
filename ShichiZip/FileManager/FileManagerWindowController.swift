@@ -1977,32 +1977,13 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     private func promptForArchiveDestination(from sourcePane: FileManagerPaneController) async -> ExtractDialogResult? {
         let dialog = ExtractDialogController(suggestedDestinationURL: sourcePane.currentDirectoryURL,
                                              baseDirectory: sourcePane.currentDirectoryURL,
-                                             message: extractDialogInfoText(for: sourcePane),
+                                             message: sourcePane.extractDialogInfoText(),
                                              defaultPathMode: sourcePane.isVirtualLocation ? .currentPaths : .fullPaths,
                                              showsCurrentPathsOption: sourcePane.isVirtualLocation,
                                              suggestedSplitDestinationName: sourcePane.suggestedExtractDestinationName,
                                              sourceArchiveAvailableForMoveToTrash: sourcePane.sourceArchiveURLForPostProcessing() != nil,
                                              sourceArchiveAvailableForQuarantineInheritance: sourcePane.quarantineSourceArchiveURLForExtraction() != nil)
         return await dialog.runModal(for: window)
-    }
-
-    private func extractDialogInfoText(for sourcePane: FileManagerPaneController) -> String {
-        var lines: [String] = []
-        lines.append(sourcePane.currentLocationDisplayPath)
-
-        let names = sourcePane.selectedItemNames(limit: 5)
-        if names.isEmpty {
-            if sourcePane.isVirtualLocation {
-                lines.append("Displayed items in the current archive folder will be extracted.")
-            }
-        } else {
-            lines.append(contentsOf: names.map { "  \($0)" })
-            if sourcePane.selectedRealItemCount > names.count {
-                lines.append("  ...")
-            }
-        }
-
-        return lines.joined(separator: "\n")
     }
 
     private func archiveExtractionPathPrefixToStrip(for items: [ArchiveItem],

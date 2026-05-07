@@ -637,11 +637,28 @@ class BenchmarkWindowController: NSWindowController, NSWindowDelegate {
 
         let alert = NSAlert()
         alert.messageText = SZL10n.string("app.benchmark.insufficientMemory")
-        alert.informativeText = "The selected benchmark settings require \(Self.displayMegabytes(required)) MB, but the usable RAM limit is \(Self.displayMegabytes(memoryLimitBytes)) MB out of \(Self.displayMegabytes(physicalMemoryBytes)) MB installed."
+        alert.informativeText = benchmarkMemoryUsageErrorText(required: required)
         alert.alertStyle = .warning
         if let window {
             alert.beginSheetModal(for: window)
         }
+    }
+
+    private func benchmarkMemoryUsageErrorText(required: UInt64) -> String {
+        [
+            SZL10n.string("memory.blocked"),
+            SZL10n.string("memory.requiresBigRAM"),
+            "",
+            Self.memoryUsageLine(bytes: required, label: SZL10n.string("memory.requiredSize")),
+            Self.memoryUsageLine(bytes: physicalMemoryBytes, label: SZL10n.string("memory.ramSize")),
+            Self.memoryUsageLine(bytes: memoryLimitBytes, label: SZL10n.string("memory.limitSetBy7Zip")),
+            "",
+            SZL10n.string("archive.memoryAllocationFailed"),
+        ].joined(separator: "\n")
+    }
+
+    private static func memoryUsageLine(bytes: UInt64, label: String) -> String {
+        "\(displayMegabytes(bytes)) MB : \(label)"
     }
 
     private static func makeDictionaryOptions() -> [DictionaryOption] {
