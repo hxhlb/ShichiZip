@@ -295,6 +295,96 @@ enum FileOperationDestinationResolver {
 }
 
 @MainActor
+enum FileOperationArchiveDestinationTransfer {
+    static func perform(_ sourceURLs: [URL],
+                        from sourcePane: FileManagerPaneController,
+                        toArchiveURL archiveURL: URL,
+                        subdir: String,
+                        move: Bool,
+                        candidatePanes: [FileManagerPaneController],
+                        parentWindow: NSWindow?,
+                        showError: @escaping @MainActor (Error) -> Void)
+    {
+        let operation: NSDragOperation = move ? .move : .copy
+
+        if let (pane, target) = archiveDestinationTarget(in: candidatePanes,
+                                                         archiveURL: archiveURL,
+                                                         subdir: subdir)
+        {
+            pane.beginArchiveTransfer(sourceURLs,
+                                      to: target,
+                                      operation: operation,
+                                      sourcePane: sourcePane,
+                                      parentWindow: parentWindow,
+                                      requiresConfirmation: false)
+            return
+        }
+
+        let operationTitle = SZL10n.string(move ? "fileop.moving" : "fileop.copying")
+        let selectionPaths = archiveSelectionPaths(for: sourceURLs, targetSubdir: subdir)
+
+        Task { @MainActor [weak sourcePane, weak parentWindow] in
+            guard let parentWindow else { return }
+            do {
+                try await ArchiveOperationRunner.run(operationTitle: operationTitle,
+                                                     parentWindow: parentWindow)
+                { session in
+                    let archive = SZArchive()
+                    try archive.open(atPath: archiveURL.path, session: session)
+                    defer { archive.close() }
+                    try archive.addPaths(sourceURLs.map(\.path),
+                                         toArchiveSubdir: subdir,
+                                         moveMode: move,
+                                         session: session)
+                }
+
+                FileManagerArchiveChangeCoordinator.publish(
+                    FileManagerArchiveChange(archiveURL: archiveURL,
+                                             targetSubdir: subdir,
+                                             selectingPaths: selectionPaths),
+                )
+                if move {
+                    sourcePane?.refresh()
+                }
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    private static func archiveDestinationTarget(in panes: [FileManagerPaneController],
+                                                 archiveURL: URL,
+                                                 subdir: String) -> (pane: FileManagerPaneController, target: (archive: SZArchive, subdir: String))?
+    {
+        for pane in panes {
+            if let target = pane.currentArchiveMutationTarget(for: archiveURL, subdir: subdir) {
+                return (pane, target)
+            }
+        }
+
+        return nil
+    }
+
+    private static func archiveSelectionPaths(for sourceURLs: [URL],
+                                              targetSubdir: String) -> [String]
+    {
+        var seenPaths = Set<String>()
+        var selectionPaths: [String] = []
+
+        for url in sourceURLs {
+            let leafName = url.lastPathComponent
+            guard !leafName.isEmpty else { continue }
+
+            let path = targetSubdir.isEmpty ? leafName : targetSubdir + "/" + leafName
+            guard seenPaths.insert(path).inserted else { continue }
+            selectionPaths.append(path)
+        }
+
+        return selectionPaths
+    }
+}
+
+@MainActor
 final class FileOperationDestinationPrompt {
     private var destinationPicker: FileOperationDestinationPicker?
     private let move: Bool

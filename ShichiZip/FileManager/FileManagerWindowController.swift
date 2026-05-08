@@ -1044,82 +1044,16 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
                                                    subdir: String,
                                                    move: Bool)
     {
-        let operation: NSDragOperation = move ? .move : .copy
-
-        if let (pane, target) = archiveDestinationTarget(for: archiveURL, subdir: subdir) {
-            pane.beginArchiveTransfer(sourceURLs,
-                                      to: target,
-                                      operation: operation,
-                                      sourcePane: sourcePane,
-                                      parentWindow: window,
-                                      requiresConfirmation: false)
-            return
+        FileOperationArchiveDestinationTransfer.perform(sourceURLs,
+                                                        from: sourcePane,
+                                                        toArchiveURL: archiveURL,
+                                                        subdir: subdir,
+                                                        move: move,
+                                                        candidatePanes: archiveCoordinationPaneControllers,
+                                                        parentWindow: window)
+        { [weak self] error in
+            self?.showErrorAlert(error)
         }
-
-        let operationTitle = SZL10n.string(move ? "fileop.moving" : "fileop.copying")
-        let selectionPaths = archiveSelectionPaths(for: sourceURLs, targetSubdir: subdir)
-
-        Task { @MainActor [weak self] in
-            guard let self, let parentWindow = window else { return }
-            do {
-                try await ArchiveOperationRunner.run(operationTitle: operationTitle,
-                                                     parentWindow: parentWindow)
-                { session in
-                    let archive = SZArchive()
-                    try archive.open(atPath: archiveURL.path, session: session)
-                    defer { archive.close() }
-                    try archive.addPaths(sourceURLs.map(\.path),
-                                         toArchiveSubdir: subdir,
-                                         moveMode: move,
-                                         session: session)
-                }
-
-                FileManagerArchiveChangeCoordinator.publish(
-                    FileManagerArchiveChange(archiveURL: archiveURL,
-                                             targetSubdir: subdir,
-                                             selectingPaths: selectionPaths),
-                )
-                if move {
-                    sourcePane.refresh()
-                }
-            } catch {
-                showErrorAlert(error)
-            }
-        }
-    }
-
-    private func archiveDestinationTarget(for archiveURL: URL,
-                                          subdir: String) -> (pane: FileManagerPaneController, target: (archive: SZArchive, subdir: String))?
-    {
-        if let target = leftPane.currentArchiveMutationTarget(for: archiveURL, subdir: subdir) {
-            return (leftPane, target)
-        }
-
-        if isDualPane,
-           let target = rightPane.currentArchiveMutationTarget(for: archiveURL, subdir: subdir)
-        {
-            return (rightPane, target)
-        }
-
-        return nil
-    }
-
-    private func archiveSelectionPaths(for sourceURLs: [URL],
-                                       targetSubdir: String) -> [String]
-    {
-        var seenPaths = Set<String>()
-        var selectionPaths: [String] = []
-
-        for url in sourceURLs {
-            let leafName = url.lastPathComponent
-            guard !leafName.isEmpty else { continue }
-
-            let path = targetSubdir.isEmpty ? leafName : targetSubdir + "/" + leafName
-            guard seenPaths.insert(path).inserted else { continue }
-            selectionPaths.append(path)
-        }
-
-        return selectionPaths
     }
 
     private func refreshPaneDisplayingDirectory(_ directoryURL: URL) {
