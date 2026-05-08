@@ -1,6 +1,19 @@
 import Cocoa
 @preconcurrency import QuickLookUI
 
+struct FileManagerQuickLookPreparedItem {
+    let url: URL
+    let title: String?
+    let sourceFrameOnScreen: NSRect
+    let transitionImage: NSImage?
+    let transitionContentRect: NSRect
+}
+
+struct FileManagerQuickLookPreparedPreview {
+    let items: [FileManagerQuickLookPreparedItem]
+    let temporaryDirectories: [URL]
+}
+
 private enum FileManagerQuickLookLimits {
     static let maxArchiveItemSize: UInt64 = 128 * 1024 * 1024
     static let maxArchiveCombinedSize: UInt64 = 256 * 1024 * 1024

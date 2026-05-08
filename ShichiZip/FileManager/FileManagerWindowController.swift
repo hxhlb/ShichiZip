@@ -254,19 +254,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         let standardizedURLs = urls.map(\.standardizedFileURL)
         guard !standardizedURLs.isEmpty else { return false }
 
-        let parentDirectory = standardizedURLs[0].deletingLastPathComponent().standardizedFileURL
-        let targetPane: FileManagerPaneController = if !leftPane.isVirtualLocation,
-                                                       leftPane.currentDirectoryURL.standardizedFileURL == parentDirectory
-        {
-            leftPane
-        } else if isDualPane,
-                  !rightPane.isVirtualLocation,
-                  rightPane.currentDirectoryURL.standardizedFileURL == parentDirectory
-        {
-            rightPane
-        } else {
-            activePane
-        }
+        let targetPane = paneRoutingContext.targetPaneForRevealingFileSystemItems(standardizedURLs)
 
         let revealed = targetPane.revealFileSystemItemURLs(standardizedURLs)
         if revealed, revealWindow {
@@ -283,31 +271,8 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
             return false
         }
 
-        let targetPane: FileManagerPaneController = if isDirectory.boolValue,
-                                                       !leftPane.isVirtualLocation,
-                                                       leftPane.currentDirectoryURL.standardizedFileURL == standardizedURL
-        {
-            leftPane
-        } else if isDirectory.boolValue,
-                  isDualPane,
-                  !rightPane.isVirtualLocation,
-                  rightPane.currentDirectoryURL.standardizedFileURL == standardizedURL
-        {
-            rightPane
-        } else if !isDirectory.boolValue,
-                  !leftPane.isVirtualLocation,
-                  leftPane.currentDirectoryURL.standardizedFileURL == standardizedURL.deletingLastPathComponent().standardizedFileURL
-        {
-            leftPane
-        } else if !isDirectory.boolValue,
-                  isDualPane,
-                  !rightPane.isVirtualLocation,
-                  rightPane.currentDirectoryURL.standardizedFileURL == standardizedURL.deletingLastPathComponent().standardizedFileURL
-        {
-            rightPane
-        } else {
-            activePane
-        }
+        let targetPane = paneRoutingContext.targetPaneForOpeningFileSystemItem(standardizedURL,
+                                                                               isDirectory: isDirectory.boolValue)
 
         let opened = targetPane.openFileSystemItemURL(standardizedURL)
         if opened, revealWindow {
@@ -826,55 +791,27 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     }
 
     @objc func switchPanes(_: Any?) {
-        guard isDualPane else { return }
-        if activePane === leftPane {
-            rightPane.focusFileList()
-        } else {
-            leftPane.focusFileList()
-        }
+        inactivePane?.focusFileList()
+    }
+
+    private var paneRoutingContext: FileManagerPaneRoutingContext {
+        FileManagerPaneRoutingContext(leftPane: leftPane,
+                                      rightPane: rightPane,
+                                      isDualPane: isDualPane,
+                                      trackedActivePane: trackedActivePane,
+                                      firstResponderView: window?.firstResponder as? NSView)
     }
 
     private var activePane: FileManagerPaneController {
-        if !isDualPane {
-            return leftPane
-        }
-
-        if let firstResponderPane = paneContainingFirstResponder() {
-            return firstResponderPane
-        }
-
-        if let trackedActivePane {
-            return trackedActivePane
-        }
-
-        return leftPane
+        paneRoutingContext.activePane
     }
 
     private var inactivePane: FileManagerPaneController? {
-        guard isDualPane else { return nil }
-        return activePane === leftPane ? rightPane : leftPane
-    }
-
-    private func paneContainingFirstResponder() -> FileManagerPaneController? {
-        guard isDualPane,
-              let firstResponder = window?.firstResponder as? NSView
-        else {
-            return nil
-        }
-
-        if firstResponder === rightPane.view || firstResponder.isDescendant(of: rightPane.view) {
-            return rightPane
-        }
-
-        if firstResponder === leftPane.view || firstResponder.isDescendant(of: leftPane.view) {
-            return leftPane
-        }
-
-        return nil
+        paneRoutingContext.inactivePane
     }
 
     private func setActivePane(_ pane: FileManagerPaneController) {
-        trackedActivePane = pane === rightPane ? rightPane : leftPane
+        trackedActivePane = paneRoutingContext.normalizedTrackedPane(for: pane)
     }
 
     // MARK: - Copy/Move (PanelCopy.cpp pattern)
@@ -1280,20 +1217,7 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     }
 
     private func refreshPaneDisplayingDirectory(_ directoryURL: URL) {
-        let standardizedDirectory = directoryURL.standardizedFileURL
-
-        if !leftPane.isVirtualLocation,
-           leftPane.currentDirectoryURL.standardizedFileURL == standardizedDirectory
-        {
-            leftPane.refresh()
-        }
-
-        if isDualPane,
-           !rightPane.isVirtualLocation,
-           rightPane.currentDirectoryURL.standardizedFileURL == standardizedDirectory
-        {
-            rightPane.refresh()
-        }
+        paneRoutingContext.refreshPaneDisplayingDirectory(directoryURL)
     }
 
     private func refreshAfterFilesystemTransfer(from sourcePane: FileManagerPaneController,
