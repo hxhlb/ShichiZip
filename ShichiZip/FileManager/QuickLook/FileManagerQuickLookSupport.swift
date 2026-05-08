@@ -39,6 +39,7 @@ struct FileManagerQuickLookArchiveSelection {
 }
 
 enum FileManagerQuickLookSourceGeometry {
+    @MainActor
     static func frameOnScreen(forRow row: Int,
                               in tableView: NSTableView,
                               window: NSWindow?,
@@ -332,11 +333,10 @@ final class FileManagerQuickLookPanelController: NSObject {
             return
         }
 
-        weak var weakCurrentController: AnyObject? = currentController
-        startPreviewTask { [weak self, weak pane] generation in
+        startPreviewTask { [weak self, weak pane, weak currentController] generation in
             guard let self,
                   let pane,
-                  let currentController = weakCurrentController
+                  let currentController
             else { return }
 
             do {

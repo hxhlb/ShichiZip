@@ -116,7 +116,8 @@ enum FileManagerArchiveOpenService {
             try archive.open(atPath: url.path,
                              openType: openMode.openType,
                              session: session)
-            let entries = try archive.entries(with: session).map { ArchiveItem(from: $0) }
+            let entries = try FileManagerArchiveListing.items(from: archive,
+                                                              session: session)
             return .opened(FileManagerPreparedArchiveOpen(hostDirectory: hostDirectory,
                                                           archivePath: url.path,
                                                           displayPathPrefix: displayPathPrefix,

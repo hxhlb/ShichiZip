@@ -219,6 +219,7 @@ struct FileManagerColumn: Equatable {
         return columns
     }
 
+    @MainActor
     static func visibleColumns(inTableOrder tableColumns: [NSTableColumn],
                                availableColumns: [FileManagerColumn]) -> [FileManagerColumn]
     {

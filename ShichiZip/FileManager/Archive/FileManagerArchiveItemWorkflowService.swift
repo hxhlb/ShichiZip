@@ -411,7 +411,8 @@ final class FileManagerArchiveItemWorkflowService {
                                           context: FileManagerArchiveItemWorkflowContext,
                                           session: SZOperationSession?) throws -> [NSNumber]
     {
-        let archiveItems = try context.archive.entries(with: session).map { ArchiveItem(from: $0) }
+        let archiveItems = try FileManagerArchiveListing.items(from: context.archive,
+                                                               session: session)
         var indices = Set<Int>()
 
         if item.index >= 0 {

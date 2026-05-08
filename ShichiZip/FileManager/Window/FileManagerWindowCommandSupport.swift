@@ -81,7 +81,8 @@ enum FileManagerArchiveCommandSupport {
                 archive.close()
             }
 
-            let archiveItems = try archive.entries(with: session).map(ArchiveItem.init)
+            let archiveItems = try FileManagerArchiveListing.items(from: archive,
+                                                                   session: session)
             let settings = extractionSettings(for: result,
                                               archiveURL: archiveURL,
                                               archiveItems: archiveItems)

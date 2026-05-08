@@ -466,6 +466,7 @@ final class FileManagerColumnTests: XCTestCase {
         XCTAssertEqual(columns.first(where: { $0.id == checksumColumnID })?.alignment, .right)
     }
 
+    @MainActor
     func testVisibleColumnsFollowTableColumnOrderAndIgnoreUnavailableColumns() {
         let methodColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(FileManagerColumnID.method.rawValue))
         let missingColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("missing"))
