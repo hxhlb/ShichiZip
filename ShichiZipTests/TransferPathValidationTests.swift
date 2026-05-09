@@ -6,6 +6,39 @@
 import XCTest
 
 final class TransferPathValidationTests: XCTestCase {
+    func testArchiveDestinationConflictRejectsArchiveItselfInSelection() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "archive-self-conflict")
+        let archiveURL = tempRoot.appendingPathComponent("payload.7z")
+        try Data("archive".utf8).write(to: archiveURL)
+
+        let conflict = FileManagerTransferDestinationValidation.archiveConflict(sourceURLs: [archiveURL],
+                                                                                archiveURL: archiveURL)
+
+        XCTAssertEqual(conflict, .archiveSelf(archiveURL.standardizedFileURL))
+    }
+
+    func testDestinationConflictUsesArchiveURLForArchiveTargets() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "archive-descendant-conflict")
+        let sourceFolder = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let archiveURL = sourceFolder.appendingPathComponent("Nested/payload.7z")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data("archive".utf8).write(to: archiveURL)
+
+        let conflict = FileManagerTransferDestinationValidation.conflict(
+            sourceURLs: [sourceFolder],
+            destinationTarget: .archive(archiveURL: archiveURL,
+                                        subdir: "inside"),
+        )
+
+        guard case let .ancestry(ancestryConflict) = conflict else {
+            return XCTFail("Expected ancestry conflict")
+        }
+        XCTAssertEqual(ancestryConflict.sourceURL, sourceFolder.standardizedFileURL)
+        XCTAssertEqual(ancestryConflict.destinationURL, archiveURL.standardizedFileURL)
+        XCTAssertEqual(ancestryConflict.kind, .descendant)
+    }
+
     func testAncestryConflictRejectsDestinationInsideSelectedFolder() throws {
         let tempRoot = try makeTemporaryDirectory(named: "descendant-destination")
 

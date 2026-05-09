@@ -1099,65 +1099,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         }
     }
 
-    // MARK: - File System Transfer Validation
-
-    nonisolated func transferFileSystemItemURLs(_ urls: [URL],
-                                                to destinationDirectory: URL,
-                                                operation: NSDragOperation,
-                                                session: SZOperationSession) throws
-    {
-        try FileOperationFileSystemTransfer.perform(urls,
-                                                    to: destinationDirectory,
-                                                    operation: operation,
-                                                    session: session)
-    }
-
-    func canTransferFileSystemItemURLs(_ urls: [URL],
-                                       to destinationURL: URL,
-                                       operation: NSDragOperation,
-                                       presentingIn window: NSWindow?) -> Bool
-    {
-        guard let conflict = FileManagerTransferPathValidation.ancestryConflict(sourceURLs: urls,
-                                                                                destinationURL: destinationURL)
-        else {
-            return true
-        }
-
-        szPresentTransferAncestryConflict(conflict,
-                                          move: operation == .move,
-                                          for: window)
-        return false
-    }
-
-    func canTransferFileSystemItemURLsToArchive(_ urls: [URL],
-                                                archiveURL: URL?,
-                                                operation: NSDragOperation,
-                                                presentingIn window: NSWindow?) -> Bool
-    {
-        guard let archiveURL else {
-            return true
-        }
-
-        let standardizedArchiveURL = archiveURL.standardizedFileURL
-        let standardizedSourceURLs = Set(urls.map(\.standardizedFileURL))
-        guard !standardizedSourceURLs.contains(standardizedArchiveURL) else {
-            szPresentTransferArchiveSelfConflict(move: operation == .move,
-                                                 for: window)
-            return false
-        }
-
-        guard let conflict = FileManagerTransferPathValidation.ancestryConflict(sourceURLs: urls,
-                                                                                destinationURL: standardizedArchiveURL)
-        else {
-            return true
-        }
-
-        szPresentTransferAncestryConflict(conflict,
-                                          move: operation == .move,
-                                          for: window)
-        return false
-    }
-
     // MARK: - Creation Operations
 
     func createFolder(named name: String) {
@@ -1519,28 +1460,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     func transferArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerPaneArchiveTransferTarget? {
         transferArchiveTarget(for: archive,
                               subdir: subdir)
-    }
-
-    func transferCanMoveOrCopyFileSystemItems(_ urls: [URL],
-                                              to destinationDirectory: URL,
-                                              operation: NSDragOperation,
-                                              presentingIn window: NSWindow?) -> Bool
-    {
-        canTransferFileSystemItemURLs(urls,
-                                      to: destinationDirectory,
-                                      operation: operation,
-                                      presentingIn: window)
-    }
-
-    func transferCanMoveOrCopyFileSystemItemsToArchive(_ urls: [URL],
-                                                       archiveURL: URL,
-                                                       operation: NSDragOperation,
-                                                       presentingIn window: NSWindow?) -> Bool
-    {
-        canTransferFileSystemItemURLsToArchive(urls,
-                                               archiveURL: archiveURL,
-                                               operation: operation,
-                                               presentingIn: window)
     }
 
     func transferRefresh() {
@@ -2096,20 +2015,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                               requiresConfirmation: Bool = false,
                               operationTitle: String? = nil)
     {
-        guard !urls.isEmpty else {
-            cleanupArchiveTransferDirectory(cleanupDirectory)
-            return
-        }
-        guard let transferTarget = transferArchiveTarget(for: target.archive,
-                                                         subdir: target.subdir)
-        else {
-            cleanupArchiveTransferDirectory(cleanupDirectory)
-            showUnavailableArchiveTransferAlert(operation: operation)
-            return
-        }
-
         transferCoordinator.beginArchiveTransfer(urls,
-                                                 to: transferTarget,
+                                                 to: target,
                                                  operation: operation,
                                                  sourceHost: sourcePane,
                                                  host: self,
@@ -2127,20 +2034,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                        parentWindow: NSWindow? = nil,
                                        operationTitle: String? = nil)
     {
-        guard !urls.isEmpty else {
-            cleanupArchiveTransferDirectory(cleanupDirectory)
-            return
-        }
-        guard let transferTarget = transferArchiveTarget(for: target.archive,
-                                                         subdir: target.subdir)
-        else {
-            cleanupArchiveTransferDirectory(cleanupDirectory)
-            showUnavailableArchiveTransferAlert(operation: operation)
-            return
-        }
-
         transferCoordinator.beginArchiveTransfer(urls,
-                                                 to: transferTarget,
+                                                 to: target,
                                                  operation: operation,
                                                  sourceHost: sourcePane,
                                                  host: self,
@@ -2148,17 +2043,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                                  parentWindow: parentWindow,
                                                  requiresConfirmation: true,
                                                  operationTitle: operationTitle)
-    }
-
-    private func cleanupArchiveTransferDirectory(_ url: URL?) {
-        guard let url else { return }
-        try? FileManager.default.removeItem(at: url)
-    }
-
-    private func showUnavailableArchiveTransferAlert(operation: NSDragOperation) {
-        showReadOnlyArchiveMutationAlert(action: operation == .move
-            ? SZL10n.string("app.fileManager.action.movingFilesIntoArchive")
-            : SZL10n.string("app.fileManager.action.addingFilesToArchive"))
     }
 
     // MARK: - Sorting (matches PanelSort.cpp)

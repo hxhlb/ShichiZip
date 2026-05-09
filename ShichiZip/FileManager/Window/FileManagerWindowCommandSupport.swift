@@ -427,10 +427,10 @@ enum FileManagerClipboardSupport {
         }
 
         let destinationURL = pane.currentDirectoryURL.standardizedFileURL
-        guard pane.canTransferFileSystemItemURLs(sourceURLs,
-                                                 to: destinationURL,
-                                                 operation: .copy,
-                                                 presentingIn: parentWindow)
+        guard FileManagerTransferDestinationValidation.canMoveOrCopyFileSystemItems(sourceURLs,
+                                                                                    to: destinationURL,
+                                                                                    operation: .copy,
+                                                                                    presentingIn: parentWindow)
         else {
             return
         }
@@ -442,10 +442,10 @@ enum FileManagerClipboardSupport {
                 try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("app.progress.pasting"),
                                                      parentWindow: parentWindow)
                 { session in
-                    try pane.transferFileSystemItemURLs(sourceURLs,
-                                                        to: destinationURL,
-                                                        operation: .copy,
-                                                        session: session)
+                    try FileOperationFileSystemTransfer.perform(sourceURLs,
+                                                                to: destinationURL,
+                                                                operation: .copy,
+                                                                session: session)
                 }
                 refreshAfterFilesystemTransfer(pane, destinationURL, .copy)
             } catch {

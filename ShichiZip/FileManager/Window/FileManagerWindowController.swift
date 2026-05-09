@@ -675,7 +675,6 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         guard let destinationTarget = promptForFileOperationDestination(forMove: move, sourcePane: pane) else { return }
         guard validateTransferDestination(destinationTarget,
                                           sourceURLs: sourceURLs,
-                                          for: pane,
                                           move: move)
         else {
             return
@@ -699,10 +698,10 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
                     try await ArchiveOperationRunner.run(operationTitle: operationTitle,
                                                          parentWindow: parentWindow)
                     { session in
-                        try pane.transferFileSystemItemURLs(sourceURLs,
-                                                            to: destURL,
-                                                            operation: dragOperation,
-                                                            session: session)
+                        try FileOperationFileSystemTransfer.perform(sourceURLs,
+                                                                    to: destURL,
+                                                                    operation: dragOperation,
+                                                                    session: session)
                     }
                     refreshAfterFilesystemTransfer(from: pane,
                                                    to: destURL,
@@ -839,7 +838,6 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
             guard let self else { return false }
             return validateTransferDestination(destinationTarget,
                                                sourceURLs: sourceSnapshot.selection.fileURLs,
-                                               for: sourcePane,
                                                move: move)
         }
 
@@ -848,42 +846,18 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
 
     private func validateTransferDestination(_ destinationTarget: FileOperationDestinationTarget,
                                              sourceURLs: [URL],
-                                             for _: FileManagerPaneController,
                                              move: Bool) -> Bool
     {
-        switch destinationTarget {
-        case let .archive(archiveURL, _):
-            let selectedURLs = Set(sourceURLs.map(\.standardizedFileURL))
-            guard !selectedURLs.contains(archiveURL.standardizedFileURL) else {
-                szPresentTransferArchiveSelfConflict(move: move,
-                                                     for: window)
-                return false
-            }
-
-            if let conflict = FileManagerTransferPathValidation.ancestryConflict(sourceURLs: sourceURLs,
-                                                                                 destinationURL: archiveURL)
-            {
-                szPresentTransferAncestryConflict(conflict,
-                                                  move: move,
-                                                  for: window)
-                return false
-            }
-
-            return true
-        case let .directory(destinationURL):
-            let standardizedDestination = destinationURL.standardizedFileURL
-
-            if let conflict = FileManagerTransferPathValidation.ancestryConflict(sourceURLs: sourceURLs,
-                                                                                 destinationURL: standardizedDestination)
-            {
-                szPresentTransferAncestryConflict(conflict,
-                                                  move: move,
-                                                  for: window)
-                return false
-            }
-
+        guard let conflict = FileManagerTransferDestinationValidation.conflict(sourceURLs: sourceURLs,
+                                                                               destinationTarget: destinationTarget)
+        else {
             return true
         }
+
+        FileManagerTransferDestinationValidation.present(conflict,
+                                                         operation: move ? .move : .copy,
+                                                         in: window)
+        return false
     }
 
     private func performArchiveDestinationTransfer(_ sourceURLs: [URL],

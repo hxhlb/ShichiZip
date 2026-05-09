@@ -158,6 +158,102 @@ enum FileOperationDestinationTarget {
     }
 }
 
+enum FileManagerTransferDestinationValidation {
+    enum Conflict: Equatable {
+        case archiveSelf(URL)
+        case ancestry(FileManagerTransferPathValidation.Conflict)
+    }
+
+    static func conflict(sourceURLs: [URL],
+                         destinationTarget: FileOperationDestinationTarget) -> Conflict?
+    {
+        switch destinationTarget {
+        case let .directory(destinationURL):
+            fileSystemConflict(sourceURLs: sourceURLs,
+                               destinationURL: destinationURL)
+        case let .archive(archiveURL, _):
+            archiveConflict(sourceURLs: sourceURLs,
+                            archiveURL: archiveURL)
+        }
+    }
+
+    static func fileSystemConflict(sourceURLs: [URL],
+                                   destinationURL: URL) -> Conflict?
+    {
+        FileManagerTransferPathValidation.ancestryConflict(sourceURLs: sourceURLs,
+                                                           destinationURL: destinationURL.standardizedFileURL)
+            .map(Conflict.ancestry)
+    }
+
+    static func archiveConflict(sourceURLs: [URL],
+                                archiveURL: URL?) -> Conflict?
+    {
+        guard let archiveURL else { return nil }
+
+        let standardizedArchiveURL = archiveURL.standardizedFileURL
+        let standardizedSourceURLs = Set(sourceURLs.map(\.standardizedFileURL))
+        guard !standardizedSourceURLs.contains(standardizedArchiveURL) else {
+            return .archiveSelf(standardizedArchiveURL)
+        }
+
+        return FileManagerTransferPathValidation.ancestryConflict(sourceURLs: sourceURLs,
+                                                                  destinationURL: standardizedArchiveURL)
+            .map(Conflict.ancestry)
+    }
+
+    @MainActor
+    static func canMoveOrCopyFileSystemItems(_ urls: [URL],
+                                             to destinationURL: URL,
+                                             operation: NSDragOperation,
+                                             presentingIn window: NSWindow?) -> Bool
+    {
+        guard let conflict = fileSystemConflict(sourceURLs: urls,
+                                                destinationURL: destinationURL)
+        else {
+            return true
+        }
+
+        present(conflict,
+                operation: operation,
+                in: window)
+        return false
+    }
+
+    @MainActor
+    static func canMoveOrCopyFileSystemItemsToArchive(_ urls: [URL],
+                                                      archiveURL: URL?,
+                                                      operation: NSDragOperation,
+                                                      presentingIn window: NSWindow?) -> Bool
+    {
+        guard let conflict = archiveConflict(sourceURLs: urls,
+                                             archiveURL: archiveURL)
+        else {
+            return true
+        }
+
+        present(conflict,
+                operation: operation,
+                in: window)
+        return false
+    }
+
+    @MainActor
+    static func present(_ conflict: Conflict,
+                        operation: NSDragOperation,
+                        in window: NSWindow?)
+    {
+        switch conflict {
+        case .archiveSelf:
+            szPresentTransferArchiveSelfConflict(move: operation == .move,
+                                                 for: window)
+        case let .ancestry(conflict):
+            szPresentTransferAncestryConflict(conflict,
+                                              move: operation == .move,
+                                              for: window)
+        }
+    }
+}
+
 enum FileOperationDestinationResolver {
     static func resolveTarget(from enteredPath: String,
                               relativeTo baseDirectory: URL,
@@ -541,14 +637,6 @@ protocol FileManagerPaneTransferHost: FileManagerPaneTransferSourceHost {
     func transferArchiveDragContext(acquireLease: Bool) -> FileManagerPaneArchiveDragContext?
     func transferCurrentArchiveMutationTarget() -> FileManagerPaneArchiveTransferTarget?
     func transferArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerPaneArchiveTransferTarget?
-    func transferCanMoveOrCopyFileSystemItems(_ urls: [URL],
-                                              to destinationDirectory: URL,
-                                              operation: NSDragOperation,
-                                              presentingIn window: NSWindow?) -> Bool
-    func transferCanMoveOrCopyFileSystemItemsToArchive(_ urls: [URL],
-                                                       archiveURL: URL,
-                                                       operation: NSDragOperation,
-                                                       presentingIn window: NSWindow?) -> Bool
     func transferDidMutateArchive(targetSubdir: String?, selectingPaths paths: [String])
     func transferShowReadOnlyArchiveMutationAlert(action: String)
     func transferShowError(_ error: Error)
@@ -730,10 +818,10 @@ final class FileManagerPaneTransferCoordinator {
         let urls = FileOperationDropResolver.fileURLs(in: info.draggingPasteboard)
         guard !urls.isEmpty else { return false }
 
-        guard host.transferCanMoveOrCopyFileSystemItems(urls,
-                                                        to: destinationDirectory,
-                                                        operation: operation,
-                                                        presentingIn: host.transferLocation.presentationWindow)
+        guard FileManagerTransferDestinationValidation.canMoveOrCopyFileSystemItems(urls,
+                                                                                    to: destinationDirectory,
+                                                                                    operation: operation,
+                                                                                    presentingIn: host.transferLocation.presentationWindow)
         else {
             return false
         }
@@ -744,6 +832,42 @@ final class FileManagerPaneTransferCoordinator {
                                  sourceHost: sourceHost,
                                  host: host)
         return true
+    }
+
+    @discardableResult
+    func beginArchiveTransfer(_ urls: [URL],
+                              to target: (archive: SZArchive, subdir: String),
+                              operation: NSDragOperation,
+                              sourceHost: (any FileManagerPaneTransferSourceHost)?,
+                              host: any FileManagerPaneTransferHost,
+                              cleanupDirectory: URL? = nil,
+                              parentWindow: NSWindow? = nil,
+                              requiresConfirmation: Bool = false,
+                              operationTitle: String? = nil) -> Bool
+    {
+        guard !urls.isEmpty else {
+            Self.removeCleanupDirectory(cleanupDirectory)
+            return false
+        }
+
+        guard let transferTarget = host.transferArchiveMutationTarget(for: target.archive,
+                                                                      subdir: target.subdir)
+        else {
+            Self.removeCleanupDirectory(cleanupDirectory)
+            Self.showUnavailableArchiveTransferAlert(operation: operation,
+                                                     host: host)
+            return false
+        }
+
+        return beginArchiveTransfer(urls,
+                                    to: transferTarget,
+                                    operation: operation,
+                                    sourceHost: sourceHost,
+                                    host: host,
+                                    cleanupDirectory: cleanupDirectory,
+                                    parentWindow: parentWindow,
+                                    requiresConfirmation: requiresConfirmation,
+                                    operationTitle: operationTitle)
     }
 
     @discardableResult
@@ -762,10 +886,10 @@ final class FileManagerPaneTransferCoordinator {
             return false
         }
 
-        guard host.transferCanMoveOrCopyFileSystemItemsToArchive(urls,
-                                                                 archiveURL: target.archiveURL,
-                                                                 operation: operation,
-                                                                 presentingIn: parentWindow ?? host.transferLocation.presentationWindow)
+        guard FileManagerTransferDestinationValidation.canMoveOrCopyFileSystemItemsToArchive(urls,
+                                                                                             archiveURL: target.archiveURL,
+                                                                                             operation: operation,
+                                                                                             presentingIn: parentWindow ?? host.transferLocation.presentationWindow)
         else {
             Self.removeCleanupDirectory(cleanupDirectory)
             return false
@@ -1071,6 +1195,14 @@ final class FileManagerPaneTransferCoordinator {
     private static func removeCleanupDirectory(_ url: URL?) {
         guard let url else { return }
         try? FileManager.default.removeItem(at: url)
+    }
+
+    private static func showUnavailableArchiveTransferAlert(operation: NSDragOperation,
+                                                            host: any FileManagerPaneTransferHost)
+    {
+        host.transferShowReadOnlyArchiveMutationAlert(action: operation == .move
+            ? SZL10n.string("app.fileManager.action.movingFilesIntoArchive")
+            : SZL10n.string("app.fileManager.action.addingFilesToArchive"))
     }
 }
 
