@@ -1,7 +1,7 @@
 import Cocoa
 
 @MainActor
-final class FileManagerPaneMenuCoordinator {
+final class FileManagerPaneMenuHandler {
     private let tableView: NSTableView
     private let activatePane: () -> Void
     private let populateColumnHeaderMenu: (NSMenu) -> Void

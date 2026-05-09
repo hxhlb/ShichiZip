@@ -14,49 +14,6 @@ struct FileManagerCoordinatedArchiveLocation: Equatable {
     }
 }
 
-struct FileManagerNestedArchiveIdentity: Hashable {
-    let displayPath: String
-
-    init(displayPath: String) {
-        self.displayPath = NSString(string: displayPath).standardizingPath
-    }
-}
-
-struct FileManagerNestedArchiveOpenSnapshot: Equatable {
-    let archiveIdentifier: ObjectIdentifier
-    let identity: FileManagerNestedArchiveIdentity?
-    let isDirty: Bool
-}
-
-enum FileManagerNestedArchiveConflictDetector {
-    static func hasConflictingOpenInstance(for identity: FileManagerNestedArchiveIdentity,
-                                           in snapshots: [FileManagerNestedArchiveOpenSnapshot]) -> Bool
-    {
-        var matchingArchiveIdentifiers = Set<ObjectIdentifier>()
-
-        for snapshot in snapshots where snapshot.identity == identity {
-            matchingArchiveIdentifiers.insert(snapshot.archiveIdentifier)
-            if matchingArchiveIdentifiers.count > 1 {
-                return true
-            }
-        }
-
-        return false
-    }
-
-    static func hasDirtyOpenInstance(for identity: FileManagerNestedArchiveIdentity,
-                                     in snapshots: [FileManagerNestedArchiveOpenSnapshot]) -> Bool
-    {
-        for snapshot in snapshots where snapshot.identity == identity {
-            if snapshot.isDirty {
-                return true
-            }
-        }
-
-        return false
-    }
-}
-
 struct FileManagerArchiveChange: Equatable {
     let archiveURL: URL
     let targetSubdir: String
@@ -76,23 +33,23 @@ struct FileManagerArchiveChange: Equatable {
 
     init?(notification: Notification) {
         guard let userInfo = notification.userInfo,
-              let archiveURL = userInfo[FileManagerArchiveChangeCoordinator.archiveURLUserInfoKey] as? URL
+              let archiveURL = userInfo[FileManagerArchiveChangeBus.archiveURLUserInfoKey] as? URL
         else {
             return nil
         }
 
         self.init(archiveURL: archiveURL,
-                  targetSubdir: userInfo[FileManagerArchiveChangeCoordinator.targetSubdirUserInfoKey] as? String ?? "",
-                  selectingPaths: userInfo[FileManagerArchiveChangeCoordinator.selectingPathsUserInfoKey] as? [String] ?? [],
-                  sourceIdentifier: userInfo[FileManagerArchiveChangeCoordinator.sourceIdentifierUserInfoKey] as? ObjectIdentifier)
+                  targetSubdir: userInfo[FileManagerArchiveChangeBus.targetSubdirUserInfoKey] as? String ?? "",
+                  selectingPaths: userInfo[FileManagerArchiveChangeBus.selectingPathsUserInfoKey] as? [String] ?? [],
+                  sourceIdentifier: userInfo[FileManagerArchiveChangeBus.sourceIdentifierUserInfoKey] as? ObjectIdentifier)
     }
 
     var notificationUserInfo: [AnyHashable: Any] {
         [
-            FileManagerArchiveChangeCoordinator.archiveURLUserInfoKey: archiveURL,
-            FileManagerArchiveChangeCoordinator.targetSubdirUserInfoKey: targetSubdir,
-            FileManagerArchiveChangeCoordinator.selectingPathsUserInfoKey: selectingPaths,
-            FileManagerArchiveChangeCoordinator.sourceIdentifierUserInfoKey: sourceIdentifier as Any,
+            FileManagerArchiveChangeBus.archiveURLUserInfoKey: archiveURL,
+            FileManagerArchiveChangeBus.targetSubdirUserInfoKey: targetSubdir,
+            FileManagerArchiveChangeBus.selectingPathsUserInfoKey: selectingPaths,
+            FileManagerArchiveChangeBus.sourceIdentifierUserInfoKey: sourceIdentifier as Any,
         ]
     }
 
@@ -106,7 +63,7 @@ enum FileManagerArchiveChangeHandlingDecision: Equatable {
     case reload(selectingPaths: [String])
 }
 
-enum FileManagerArchiveChangeCoordinator {
+enum FileManagerArchiveChangeBus {
     static let archiveURLUserInfoKey = "archiveURL"
     static let targetSubdirUserInfoKey = "targetSubdir"
     static let selectingPathsUserInfoKey = "selectingPaths"

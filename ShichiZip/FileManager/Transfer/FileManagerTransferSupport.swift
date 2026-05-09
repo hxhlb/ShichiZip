@@ -1419,7 +1419,7 @@ enum FileOperationArchiveDestinationTransfer {
                                          session: session)
                 }
 
-                FileManagerArchiveChangeCoordinator.publish(
+                FileManagerArchiveChangeBus.publish(
                     FileManagerArchiveChange(archiveURL: archiveURL,
                                              targetSubdir: subdir,
                                              selectingPaths: selectionPaths),

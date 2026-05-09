@@ -359,9 +359,9 @@ final class FileManagerPaneArchiveCoordinator {
     }
 
     func handlePublishedArchiveChange(_ change: FileManagerArchiveChange) {
-        switch FileManagerArchiveChangeCoordinator.handlingDecision(for: change,
-                                                                    currentLocation: archiveSession.coordinatedLocation(),
-                                                                    observerIdentifier: observerIdentifier)
+        switch FileManagerArchiveChangeBus.handlingDecision(for: change,
+                                                            currentLocation: archiveSession.coordinatedLocation(),
+                                                            observerIdentifier: observerIdentifier)
         {
         case .ignore:
             return
@@ -382,7 +382,7 @@ final class FileManagerPaneArchiveCoordinator {
         let normalizedTargetSubdir = normalizeArchivePath(targetSubdir ?? level.currentSubdir)
         let normalizedPaths = paths.map(normalizeArchivePath)
 
-        FileManagerArchiveChangeCoordinator.publish(
+        FileManagerArchiveChangeBus.publish(
             FileManagerArchiveChange(archiveURL: archiveURL,
                                      targetSubdir: normalizedTargetSubdir,
                                      selectingPaths: normalizedPaths,
@@ -433,7 +433,7 @@ final class FileManagerPaneArchiveCoordinator {
             }
 
             if let publishedChange = nestedWriteBackResult.publishedChange {
-                FileManagerArchiveChangeCoordinator.publish(publishedChange)
+                FileManagerArchiveChangeBus.publish(publishedChange)
             }
 
             if !archiveSession.isInsideArchive {

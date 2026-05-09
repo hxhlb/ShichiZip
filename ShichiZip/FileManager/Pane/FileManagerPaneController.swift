@@ -18,7 +18,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     private var scrollView: NSScrollView!
     private var statusLabel: NSTextField!
     private var listViewCoordinator: FileManagerPaneListViewCoordinator!
-    private var menuCoordinator: FileManagerPaneMenuCoordinator!
+    private var menuHandler: FileManagerPaneMenuHandler!
     private var eventCoordinator: FileManagerPaneEventCoordinator?
     private let iconProvider = FileManagerPaneIconProvider(iconSize: NSSize(width: 16, height: 16))
     private let transferCoordinator = FileManagerPaneTransferCoordinator()
@@ -323,7 +323,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                 self?.tableView.reloadData()
             },
         )
-        menuCoordinator = FileManagerPaneMenuCoordinator(
+        menuHandler = FileManagerPaneMenuHandler(
             tableView: tableView,
             activatePane: { [weak self] in
                 guard let self else { return }
@@ -336,8 +336,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
         fileTableView.contextMenuPreparationHandler = { [weak self] clickedRow in
             guard let self else { return }
-            menuCoordinator.prepareContextMenu(forClickedRow: clickedRow,
-                                               presentationWindow: view.window)
+            menuHandler.prepareContextMenu(forClickedRow: clickedRow,
+                                           presentationWindow: view.window)
         }
         fileTableView.quickLookPreviewHandler = { [weak self] in
             guard let self else { return }
@@ -347,7 +347,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             self?.handleShortcutEvent(event) ?? false
         }
         listViewCoordinator.updateForCurrentLocation()
-        tableView.headerView?.menu = menuCoordinator.makeColumnHeaderMenu(delegate: self)
+        tableView.headerView?.menu = menuHandler.makeColumnHeaderMenu(delegate: self)
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -1777,7 +1777,7 @@ extension FileManagerPaneController {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        menuCoordinator.menuNeedsUpdate(menu)
+        menuHandler.menuNeedsUpdate(menu)
     }
 }
 
@@ -1798,8 +1798,8 @@ extension FileManagerPaneController {
     }
 
     private func refreshContextMenu() {
-        tableView.menu = menuCoordinator.makeContextMenu(windowTarget: delegate as AnyObject?,
-                                                         delegate: self)
+        tableView.menu = menuHandler.makeContextMenu(windowTarget: delegate as AnyObject?,
+                                                     delegate: self)
     }
 
     func controlTextDidBeginEditing(_: Notification) {
