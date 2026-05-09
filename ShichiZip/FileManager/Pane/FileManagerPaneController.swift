@@ -82,8 +82,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             self?.updateTableColumnsForCurrentLocation()
         },
         sortCurrentItems: { [weak self] in
-            guard let self else { return }
-            sortCurrentItems(by: tableView.sortDescriptors)
+            self?.sortCurrentItemsByCurrentListViewDescriptors()
         },
         reloadTableData: { [weak self] in
             self?.tableView.reloadData()
@@ -140,8 +139,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                 self?.directoryCoordinator.prepareForArchivePresentation(hostDirectory: hostDirectory)
             },
             sortCurrentItems: { [weak self] in
-                guard let self else { return }
-                sortCurrentItems(by: tableView.sortDescriptors)
+                self?.sortCurrentItemsByCurrentListViewDescriptors()
             },
             updatePathField: { [weak self] in
                 self?.updatePathField()
@@ -270,7 +268,20 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
     private func configureTableView(_ fileTableView: FileManagerTableView) {
         tableView = fileTableView
-        listViewCoordinator = FileManagerPaneListViewCoordinator(tableView: tableView)
+        listViewCoordinator = FileManagerPaneListViewCoordinator(
+            tableView: tableView,
+            currentLocation: { [weak self] in
+                self?.currentListViewLocation()
+                    ?? FileManagerPaneListViewLocation(columns: FileManagerColumn.fileSystemColumns,
+                                                       folderTypeID: FileManagerViewPreferences.fileSystemListViewFolderTypeID)
+            },
+            sortItems: { [weak self] descriptors in
+                self?.sortCurrentItems(by: descriptors)
+            },
+            reloadTableData: { [weak self] in
+                self?.tableView.reloadData()
+            },
+        )
         menuCoordinator = FileManagerPaneMenuCoordinator(
             tableView: tableView,
             activatePane: { [weak self] in
@@ -294,8 +305,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         fileTableView.shortcutEventHandler = { [weak self] event in
             self?.handleShortcutEvent(event) ?? false
         }
-        configureTableColumns(FileManagerColumn.fileSystemColumns,
-                              folderTypeID: FileManagerViewPreferences.fileSystemListViewFolderTypeID)
+        listViewCoordinator.updateForCurrentLocation()
         tableView.headerView?.menu = menuCoordinator.makeColumnHeaderMenu(delegate: self)
 
         tableView.dataSource = self
@@ -380,7 +390,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             let shouldResetListViewPreferences = notification.userInfo?[FileManagerViewPreferences.listViewPreferencesResetUserInfoKey] as? Bool == true
             MainActor.assumeIsolated {
                 if shouldResetListViewPreferences {
-                    self?.resetTableColumnsForCurrentLocation()
+                    self?.listViewCoordinator.resetForCurrentLocation()
                 } else {
                     self?.reloadPresentedValues()
                 }
@@ -446,59 +456,26 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         directoryCoordinator.autoRefreshCurrentDirectoryIfNeeded()
     }
 
-    private func columnsForCurrentLocation() -> [FileManagerColumn] {
+    private func currentListViewLocation() -> FileManagerPaneListViewLocation {
         if let level = archiveSession.currentLevel {
-            return FileManagerColumn.archiveColumns(entryProperties: level.entryProperties)
+            return FileManagerPaneListViewLocation(columns: FileManagerColumn.archiveColumns(entryProperties: level.entryProperties),
+                                                   folderTypeID: FileManagerViewPreferences.archiveListViewFolderTypeID(formatName: level.archive.formatName))
         }
-        return FileManagerColumn.fileSystemColumns
+        return FileManagerPaneListViewLocation(columns: FileManagerColumn.fileSystemColumns,
+                                               folderTypeID: FileManagerViewPreferences.fileSystemListViewFolderTypeID)
     }
 
     private func updateTableColumnsForCurrentLocation() {
         guard isViewLoaded else { return }
-        configureTableColumns(columnsForCurrentLocation(),
-                              folderTypeID: listViewFolderTypeIDForCurrentLocation())
-    }
-
-    private func configureTableColumns(_ columns: [FileManagerColumn],
-                                       folderTypeID: String,
-                                       preferSavedState: Bool = true)
-    {
-        listViewCoordinator.configure(columns: columns,
-                                      folderTypeID: folderTypeID,
-                                      preferSavedState: preferSavedState)
+        listViewCoordinator.updateForCurrentLocation()
     }
 
     private func refreshColumnTitles() {
-        listViewCoordinator.refreshColumnTitles(columns: columnsForCurrentLocation(),
-                                                fallbackFolderTypeID: listViewFolderTypeIDForCurrentLocation())
-    }
-
-    private func listViewFolderTypeIDForCurrentLocation() -> String {
-        if let level = archiveSession.currentLevel {
-            return FileManagerViewPreferences.archiveListViewFolderTypeID(formatName: level.archive.formatName)
-        }
-        return FileManagerViewPreferences.fileSystemListViewFolderTypeID
+        listViewCoordinator.refreshColumnTitles()
     }
 
     private func handleTableColumnLayoutDidChange() {
-        listViewCoordinator.handleColumnLayoutDidChange(availableColumns: columnsForCurrentLocation())
-    }
-
-    private func persistCurrentListViewInfo() {
-        guard isViewLoaded else { return }
-        listViewCoordinator.persistCurrentInfo(availableColumns: columnsForCurrentLocation())
-    }
-
-    private func resetTableColumnsForCurrentLocation() {
-        guard isViewLoaded else { return }
-        listViewCoordinator.reset(columns: columnsForCurrentLocation(),
-                                  folderTypeID: listViewFolderTypeIDForCurrentLocation())
-        sortCurrentItems(by: tableView.sortDescriptors)
-        tableView.reloadData()
-    }
-
-    private func updateHighlightedTableColumn(for sortKey: String?) {
-        listViewCoordinator.updateHighlightedColumn(for: sortKey)
+        listViewCoordinator.handleColumnLayoutDidChange()
     }
 
     private func clearSuspendedState() {
@@ -877,39 +854,39 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     // MARK: - Sort Commands
 
     func sortByName() {
-        applySortDescriptor(columnIdentifier: "name",
-                            key: "name",
-                            ascending: true,
-                            selector: #selector(NSString.localizedStandardCompare(_:)))
+        listViewCoordinator.applySortDescriptor(columnIdentifier: "name",
+                                                key: "name",
+                                                ascending: true,
+                                                selector: #selector(NSString.localizedStandardCompare(_:)))
     }
 
     func sortBySize() {
-        applySortDescriptor(columnIdentifier: "size",
-                            key: "size",
-                            ascending: false)
+        listViewCoordinator.applySortDescriptor(columnIdentifier: "size",
+                                                key: "size",
+                                                ascending: false)
     }
 
     func sortByType() {
-        applySortDescriptor(columnIdentifier: "name",
-                            key: "type",
-                            ascending: true,
-                            selector: #selector(NSString.localizedStandardCompare(_:)))
+        listViewCoordinator.applySortDescriptor(columnIdentifier: "name",
+                                                key: "type",
+                                                ascending: true,
+                                                selector: #selector(NSString.localizedStandardCompare(_:)))
     }
 
     func sortByModifiedDate() {
-        applySortDescriptor(columnIdentifier: "modified",
-                            key: "modified",
-                            ascending: false)
+        listViewCoordinator.applySortDescriptor(columnIdentifier: "modified",
+                                                key: "modified",
+                                                ascending: false)
     }
 
     func sortByCreatedDate() {
-        applySortDescriptor(columnIdentifier: "created",
-                            key: "created",
-                            ascending: false)
+        listViewCoordinator.applySortDescriptor(columnIdentifier: "created",
+                                                key: "created",
+                                                ascending: false)
     }
 
     var primarySortKey: String? {
-        tableView.sortDescriptors.first?.key
+        listViewCoordinator.primarySortKey
     }
 
     var currentLocationDisplayPath: String {
@@ -1900,22 +1877,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         FileManagerArchiveChange.normalizeArchivePath(path)
     }
 
-    // MARK: - Sorting Support
-
-    private func applySortDescriptor(columnIdentifier: String,
-                                     key: String,
-                                     ascending: Bool,
-                                     selector: Selector? = nil)
-    {
-        listViewCoordinator.applySortDescriptor(columnIdentifier: columnIdentifier,
-                                                key: key,
-                                                ascending: ascending,
-                                                selector: selector,
-                                                availableColumns: columnsForCurrentLocation())
-        sortCurrentItems(by: tableView.sortDescriptors)
-        tableView.reloadData()
-    }
-
     // MARK: - Archive Extraction Execution
 
     private func extractArchiveItems(_ itemsToExtract: [ArchiveItem],
@@ -1998,6 +1959,11 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         }
     }
 
+    private func sortCurrentItemsByCurrentListViewDescriptors() {
+        guard isViewLoaded else { return }
+        listViewCoordinator.sortItemsUsingCurrentDescriptors()
+    }
+
     // MARK: - Actions
 
     @objc private func pathFieldSubmitted(_ sender: NSTextField) {
@@ -2075,7 +2041,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                                      for: paneItem,
                                                      tableColumn: tableColumn,
                                                      columns: listViewCoordinator.currentColumns,
-                                                     fallbackColumns: columnsForCurrentLocation(),
+                                                     fallbackColumns: listViewCoordinator.availableColumns,
                                                      dateFormatter: FileManagerViewPreferences.makeListDateFormatter(),
                                                      owner: self,
                                                      iconSize: iconSize,
@@ -2197,12 +2163,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
     // MARK: - Sorting (matches PanelSort.cpp)
 
-    func tableView(_ tableView: NSTableView, sortDescriptorsDidChange _: [NSSortDescriptor]) {
-        guard !listViewCoordinator.isApplyingPreferences else { return }
-        sortCurrentItems(by: tableView.sortDescriptors)
-        updateHighlightedTableColumn(for: tableView.sortDescriptors.first?.key)
-        persistCurrentListViewInfo()
-        tableView.reloadData()
+    func tableView(_: NSTableView, sortDescriptorsDidChange _: [NSSortDescriptor]) {
+        listViewCoordinator.handleSortDescriptorsDidChange()
     }
 }
 
@@ -2236,7 +2198,6 @@ extension FileManagerPaneController {
 extension FileManagerPaneController {
     private func populateColumnHeaderMenu(_ menu: NSMenu) {
         listViewCoordinator.populateColumnHeaderMenu(menu,
-                                                     availableColumns: columnsForCurrentLocation(),
                                                      target: self,
                                                      action: #selector(toggleListViewColumnVisibility(_:)))
     }
@@ -2245,14 +2206,7 @@ extension FileManagerPaneController {
         guard let rawColumnID = sender.representedObject as? String else { return }
         let columnID = FileManagerColumnID(rawValue: rawColumnID)
 
-        let availableColumns = columnsForCurrentLocation()
-        let didChange = listViewCoordinator.toggleColumnVisibility(columnID,
-                                                                   availableColumns: availableColumns,
-                                                                   folderTypeID: listViewFolderTypeIDForCurrentLocation())
-        guard didChange else { return }
-
-        sortCurrentItems(by: tableView.sortDescriptors)
-        tableView.reloadData()
+        listViewCoordinator.toggleColumnVisibility(columnID)
     }
 
     private func refreshContextMenu() {

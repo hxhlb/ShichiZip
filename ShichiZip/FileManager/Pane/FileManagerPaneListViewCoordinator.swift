@@ -1,20 +1,163 @@
 import Cocoa
 
+struct FileManagerPaneListViewLocation: Equatable {
+    let columns: [FileManagerColumn]
+    let folderTypeID: String
+}
+
 @MainActor
 final class FileManagerPaneListViewCoordinator {
     private let tableView: NSTableView
+    private let currentLocation: () -> FileManagerPaneListViewLocation
+    private let sortItems: ([NSSortDescriptor]) -> Void
+    private let reloadTableData: () -> Void
     private var currentFolderTypeID: String?
 
     private(set) var currentColumns: [FileManagerColumn] = []
     private(set) var isApplyingPreferences = false
 
-    init(tableView: NSTableView) {
+    init(tableView: NSTableView,
+         currentLocation: @escaping () -> FileManagerPaneListViewLocation,
+         sortItems: @escaping ([NSSortDescriptor]) -> Void = { _ in },
+         reloadTableData: @escaping () -> Void = {})
+    {
         self.tableView = tableView
+        self.currentLocation = currentLocation
+        self.sortItems = sortItems
+        self.reloadTableData = reloadTableData
     }
 
-    func configure(columns: [FileManagerColumn],
-                   folderTypeID: String,
-                   preferSavedState: Bool = true)
+    var availableColumns: [FileManagerColumn] {
+        currentLocation().columns
+    }
+
+    var primarySortKey: String? {
+        tableView.sortDescriptors.first?.key
+    }
+
+    func updateForCurrentLocation(preferSavedState: Bool = true) {
+        let location = currentLocation()
+        configure(columns: location.columns,
+                  folderTypeID: location.folderTypeID,
+                  preferSavedState: preferSavedState)
+    }
+
+    func refreshColumnTitles() {
+        let location = currentLocation()
+        configure(columns: location.columns,
+                  folderTypeID: currentFolderTypeID ?? location.folderTypeID)
+    }
+
+    func handleColumnLayoutDidChange() {
+        guard !isApplyingPreferences else { return }
+        let location = currentLocation()
+        currentColumns = FileManagerColumn.visibleColumns(inTableOrder: tableView.tableColumns,
+                                                          availableColumns: location.columns)
+        persistCurrentInfo(availableColumns: location.columns)
+    }
+
+    func resetForCurrentLocation() {
+        updateForCurrentLocation(preferSavedState: false)
+        sortItemsUsingCurrentDescriptors()
+        reloadTableData()
+    }
+
+    func sortItemsUsingCurrentDescriptors() {
+        sortItems(tableView.sortDescriptors)
+    }
+
+    func applySortDescriptor(columnIdentifier: String,
+                             key: String,
+                             ascending: Bool,
+                             selector: Selector? = nil)
+    {
+        let location = currentLocation()
+        let descriptor = NSSortDescriptor(key: key,
+                                          ascending: ascending,
+                                          selector: selector)
+        applyPreferences {
+            tableView.sortDescriptors = [descriptor]
+            tableView.highlightedTableColumn = tableView.tableColumns.first { $0.identifier.rawValue == columnIdentifier }
+        }
+        persistCurrentInfo(availableColumns: location.columns)
+        sortItemsUsingCurrentDescriptors()
+        reloadTableData()
+    }
+
+    func handleSortDescriptorsDidChange() {
+        guard !isApplyingPreferences else { return }
+        sortItemsUsingCurrentDescriptors()
+        updateHighlightedColumn(for: tableView.sortDescriptors.first?.key)
+        persistCurrentInfo(availableColumns: currentLocation().columns)
+        reloadTableData()
+    }
+
+    func populateColumnHeaderMenu(_ menu: NSMenu,
+                                  target: AnyObject,
+                                  action: Selector)
+    {
+        let availableColumns = currentLocation().columns
+        menu.removeAllItems()
+
+        let visibleIDs = Set(tableView.tableColumns.map { FileManagerColumnID(rawValue: $0.identifier.rawValue) })
+        for column in availableColumns {
+            let item = NSMenuItem(title: column.title,
+                                  action: action,
+                                  keyEquivalent: "")
+            item.target = target
+            item.representedObject = column.id.rawValue
+            item.state = visibleIDs.contains(column.id) ? .on : .off
+            item.isEnabled = column.id != .name
+            menu.addItem(item)
+        }
+    }
+
+    @discardableResult
+    func toggleColumnVisibility(_ columnID: FileManagerColumnID) -> Bool {
+        let location = currentLocation()
+        guard columnID != .name,
+              let column = location.columns.first(where: { $0.id == columnID })
+        else {
+            return false
+        }
+
+        let isHidingColumn = tableView.tableColumns.contains { $0.identifier.rawValue == column.id.rawValue }
+        if isHidingColumn {
+            persistCurrentInfo(availableColumns: location.columns)
+        }
+        let sortDescriptorsBeforeColumnChange = tableView.sortDescriptors
+
+        applyPreferences {
+            if let tableColumn = tableView.tableColumns.first(where: { $0.identifier.rawValue == column.id.rawValue }) {
+                tableView.removeTableColumn(tableColumn)
+            } else {
+                let tableColumn = column.makeTableColumn()
+                tableColumn.width = FileManagerViewPreferences.storedListViewColumnWidth(for: column,
+                                                                                         folderTypeID: location.folderTypeID)
+                tableView.addTableColumn(tableColumn)
+                restoreColumnPosition(columnID,
+                                      folderTypeID: location.folderTypeID,
+                                      availableColumns: location.columns)
+            }
+
+            currentColumns = FileManagerColumn.visibleColumns(inTableOrder: tableView.tableColumns,
+                                                              availableColumns: location.columns)
+            let visibleIDs = Set(currentColumns.map(\.id))
+            tableView.sortDescriptors = FileManagerViewPreferences.sortDescriptorsByResettingUnavailableColumn(sortDescriptorsBeforeColumnChange,
+                                                                                                               visibleColumnIDs: visibleIDs,
+                                                                                                               availableColumns: location.columns)
+        }
+
+        updateHighlightedColumn(for: tableView.sortDescriptors.first?.key)
+        persistCurrentInfo(availableColumns: location.columns)
+        sortItemsUsingCurrentDescriptors()
+        reloadTableData()
+        return true
+    }
+
+    private func configure(columns: [FileManagerColumn],
+                           folderTypeID: String,
+                           preferSavedState: Bool = true)
     {
         let listViewInfo = preferSavedState
             ? FileManagerViewPreferences.listViewInfo(forFolderTypeID: folderTypeID)
@@ -58,21 +201,7 @@ final class FileManagerPaneListViewCoordinator {
         }
     }
 
-    func refreshColumnTitles(columns: [FileManagerColumn],
-                             fallbackFolderTypeID: String)
-    {
-        configure(columns: columns,
-                  folderTypeID: currentFolderTypeID ?? fallbackFolderTypeID)
-    }
-
-    func handleColumnLayoutDidChange(availableColumns: [FileManagerColumn]) {
-        guard !isApplyingPreferences else { return }
-        currentColumns = FileManagerColumn.visibleColumns(inTableOrder: tableView.tableColumns,
-                                                          availableColumns: availableColumns)
-        persistCurrentInfo(availableColumns: availableColumns)
-    }
-
-    func persistCurrentInfo(availableColumns: [FileManagerColumn]) {
+    private func persistCurrentInfo(availableColumns: [FileManagerColumn]) {
         guard !isApplyingPreferences,
               !FileManagerViewPreferences.isListViewInfoPersistenceDisabled,
               let folderTypeID = currentFolderTypeID
@@ -102,15 +231,7 @@ final class FileManagerPaneListViewCoordinator {
         FileManagerViewPreferences.setListViewInfo(info, forFolderTypeID: folderTypeID)
     }
 
-    func reset(columns: [FileManagerColumn],
-               folderTypeID: String)
-    {
-        configure(columns: columns,
-                  folderTypeID: folderTypeID,
-                  preferSavedState: false)
-    }
-
-    func updateHighlightedColumn(for sortKey: String?) {
+    private func updateHighlightedColumn(for sortKey: String?) {
         guard let sortKey,
               let columnID = FileManagerViewPreferences.highlightedColumnID(for: sortKey,
                                                                             columns: currentColumns)
@@ -120,82 +241,6 @@ final class FileManagerPaneListViewCoordinator {
         }
 
         tableView.highlightedTableColumn = tableView.tableColumns.first { $0.identifier.rawValue == columnID.rawValue }
-    }
-
-    func applySortDescriptor(columnIdentifier: String,
-                             key: String,
-                             ascending: Bool,
-                             selector: Selector?,
-                             availableColumns: [FileManagerColumn])
-    {
-        let descriptor = NSSortDescriptor(key: key,
-                                          ascending: ascending,
-                                          selector: selector)
-        tableView.sortDescriptors = [descriptor]
-        tableView.highlightedTableColumn = tableView.tableColumns.first { $0.identifier.rawValue == columnIdentifier }
-        persistCurrentInfo(availableColumns: availableColumns)
-    }
-
-    func populateColumnHeaderMenu(_ menu: NSMenu,
-                                  availableColumns: [FileManagerColumn],
-                                  target: AnyObject,
-                                  action: Selector)
-    {
-        menu.removeAllItems()
-
-        let visibleIDs = Set(tableView.tableColumns.map { FileManagerColumnID(rawValue: $0.identifier.rawValue) })
-        for column in availableColumns {
-            let item = NSMenuItem(title: column.title,
-                                  action: action,
-                                  keyEquivalent: "")
-            item.target = target
-            item.representedObject = column.id.rawValue
-            item.state = visibleIDs.contains(column.id) ? .on : .off
-            item.isEnabled = column.id != .name
-            menu.addItem(item)
-        }
-    }
-
-    @discardableResult
-    func toggleColumnVisibility(_ columnID: FileManagerColumnID,
-                                availableColumns: [FileManagerColumn],
-                                folderTypeID: String) -> Bool
-    {
-        guard columnID != .name,
-              let column = availableColumns.first(where: { $0.id == columnID })
-        else {
-            return false
-        }
-
-        let isHidingColumn = tableView.tableColumns.contains { $0.identifier.rawValue == column.id.rawValue }
-        if isHidingColumn {
-            persistCurrentInfo(availableColumns: availableColumns)
-        }
-
-        applyPreferences {
-            if let tableColumn = tableView.tableColumns.first(where: { $0.identifier.rawValue == column.id.rawValue }) {
-                tableView.removeTableColumn(tableColumn)
-            } else {
-                let tableColumn = column.makeTableColumn()
-                tableColumn.width = FileManagerViewPreferences.storedListViewColumnWidth(for: column,
-                                                                                         folderTypeID: folderTypeID)
-                tableView.addTableColumn(tableColumn)
-                restoreColumnPosition(columnID,
-                                      folderTypeID: folderTypeID,
-                                      availableColumns: availableColumns)
-            }
-
-            currentColumns = FileManagerColumn.visibleColumns(inTableOrder: tableView.tableColumns,
-                                                              availableColumns: availableColumns)
-            let visibleIDs = Set(currentColumns.map(\.id))
-            tableView.sortDescriptors = FileManagerViewPreferences.sortDescriptorsByResettingUnavailableColumn(tableView.sortDescriptors,
-                                                                                                               visibleColumnIDs: visibleIDs,
-                                                                                                               availableColumns: availableColumns)
-        }
-
-        updateHighlightedColumn(for: tableView.sortDescriptors.first?.key)
-        persistCurrentInfo(availableColumns: availableColumns)
-        return true
     }
 
     private func applyPreferences(_ updates: () -> Void) {
