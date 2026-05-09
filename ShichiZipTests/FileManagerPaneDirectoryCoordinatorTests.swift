@@ -8,6 +8,15 @@ import XCTest
 
 @MainActor
 final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // https://github.com/swiftlang/swift/issues/85663
+        // Fixed in https://github.com/swiftlang/swift/pull/85204 but only released with Swift 6.3+, so skip affected macOS 26.0-26.3 runtimes.
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        guard version.majorVersion == 26, version.minorVersion < 4 else { return }
+        throw XCTSkip("macOS 26.0-26.3 system Swift runtime crashes when isolated deinit tears down fallback task locals.")
+    }
+
     func testLoadDirectoryAppliesSnapshotAndPresentationCallbacks() throws {
         let directoryURL = try makeTemporaryDirectory(named: "load-directory",
                                                       prefix: "ShichiZipDirectoryCoordinatorTests")
