@@ -27,8 +27,11 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     private let listRowHeight: CGFloat = 22
-    private(set) var isSuspended = false
-    private var suspendedOverlay: NSView?
+    private var suspensionCoordinatorStorage: FileManagerPaneSuspensionCoordinator?
+
+    var isSuspended: Bool {
+        suspensionCoordinatorStorage?.isSuspended ?? false
+    }
 
     var currentDirectory: URL {
         directoryCoordinator.currentDirectory
@@ -169,6 +172,53 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
     var supportsInPlaceArchiveMutation: Bool {
         archiveCoordinator.supportsInPlaceMutation()
+    }
+
+    private var suspensionCoordinator: FileManagerPaneSuspensionCoordinator {
+        if let suspensionCoordinatorStorage {
+            return suspensionCoordinatorStorage
+        }
+
+        let coordinator = FileManagerPaneSuspensionCoordinator(
+            isViewLoaded: { [weak self] in
+                self?.isViewLoaded == true
+            },
+            isInsideArchive: { [weak self] in
+                self?.isInsideArchive == true
+            },
+            closeAllArchives: { [weak self] showError in
+                self?.closeAllArchives(showError: showError) == true
+            },
+            prepareDirectoryForSuspension: { [weak self] in
+                self?.directoryCoordinator.prepareForSuspension()
+            },
+            cancelPendingArchiveRefresh: { [weak self] in
+                self?.cancelPendingArchiveRefresh()
+            },
+            clearArchiveDisplayItems: { [weak self] in
+                self?.archiveSession.clearDisplayItems()
+            },
+            clearStatusText: { [weak self] in
+                self?.statusLabel.stringValue = ""
+            },
+            containerView: { [weak self] in
+                guard let self, isViewLoaded else { return nil }
+                return view
+            },
+            scrollView: { [weak self] in
+                guard let self, isViewLoaded else { return nil }
+                return scrollView
+            },
+            currentDirectory: { [weak self] in
+                self?.currentDirectory ?? FileManager.default.homeDirectoryForCurrentUser
+            },
+            loadDirectory: { [weak self] url, showError in
+                self?.loadDirectory(url,
+                                    showError: showError) == true
+            },
+        )
+        suspensionCoordinatorStorage = coordinator
+        return coordinator
     }
 
     private var showsRealFileIcons: Bool {
@@ -378,10 +428,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     private func clearSuspendedState() {
-        guard isSuspended else { return }
-        isSuspended = false
-        suspendedOverlay?.removeFromSuperview()
-        suspendedOverlay = nil
+        suspensionCoordinatorStorage?.clearSuspendedState()
     }
 
     // MARK: - Pane Refresh And Focus
@@ -1404,105 +1451,20 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
     @discardableResult
     func prepareForClose(showError: Bool = true) -> Bool {
-        guard !isInsideArchive else {
-            let didClose = closeAllArchives(showError: showError)
-            if didClose, isViewLoaded {
-                enterSuspendedState()
-            }
-            return didClose
-        }
-        return true
+        suspensionCoordinator.prepareForClose(showError: showError)
     }
 
     @discardableResult
     func prepareForDeactivation(showError: Bool = true) -> Bool {
-        guard prepareForClose(showError: showError) else {
-            return false
-        }
-
-        if isViewLoaded {
-            enterSuspendedState()
-        }
-
-        return true
+        suspensionCoordinator.prepareForDeactivation(showError: showError)
     }
 
     func reactivateIfSuspended() {
-        guard isSuspended else { return }
-        reactivatePane()
+        suspensionCoordinatorStorage?.reactivateIfSuspended()
     }
 
     func closeDirectory() {
-        guard !isSuspended else { return }
-        if isInsideArchive {
-            _ = closeAllArchives(showError: true)
-        }
-        if !isInsideArchive, isViewLoaded {
-            enterSuspendedState()
-        }
-    }
-
-    private func enterSuspendedState() {
-        guard !isSuspended else { return }
-        isSuspended = true
-
-        directoryCoordinator.prepareForSuspension()
-        cancelPendingArchiveRefresh()
-        archiveSession.clearDisplayItems()
-        statusLabel.stringValue = ""
-
-        let overlay = NSView()
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.wantsLayer = true
-        overlay.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.85).cgColor
-        overlay.setAccessibilityIdentifier("fileManager.suspendedOverlay")
-
-        let label = NSTextField(labelWithString: SZL10n.string("app.fileManager.suspendedDescription"))
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .secondaryLabelColor
-        label.alignment = .center
-        label.lineBreakMode = .byWordWrapping
-        label.maximumNumberOfLines = 0
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        overlay.addSubview(label)
-
-        let button = NSButton(title: SZL10n.string("app.fileManager.reactivatePane"),
-                              target: self,
-                              action: #selector(reactivatePaneClicked(_:)))
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.bezelStyle = .rounded
-        button.controlSize = .large
-        button.setAccessibilityIdentifier("fileManager.reactivateButton")
-        overlay.addSubview(button)
-
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            label.bottomAnchor.constraint(equalTo: button.topAnchor, constant: -12),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 24),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -24),
-            button.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            button.centerYAnchor.constraint(equalTo: overlay.centerYAnchor, constant: 12),
-        ])
-
-        view.addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-        ])
-
-        suspendedOverlay = overlay
-    }
-
-    @objc private func reactivatePaneClicked(_: Any?) {
-        reactivatePane()
-    }
-
-    private func reactivatePane() {
-        guard isSuspended else { return }
-        loadDirectory(currentDirectory, showError: true)
+        suspensionCoordinator.closeDirectory()
     }
 
     // MARK: - Archive Reloads And Change Propagation
