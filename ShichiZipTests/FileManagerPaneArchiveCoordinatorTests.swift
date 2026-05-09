@@ -140,6 +140,100 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
         XCTAssertTrue(didPresentParentSubdir)
     }
 
+    func testMutationTargetsResolveCurrentArchiveAndRevalidateByArchiveURL() throws {
+        let session = FileManagerArchiveSession()
+        let prepared = try makePreparedArchive(named: "mutation-target",
+                                               entries: [makeArchiveItem(index: 7,
+                                                                         path: "folder/payload.txt")])
+        session.appendPreparedArchive(prepared)
+        let coordinator = makeCoordinator(session: session)
+
+        let currentTarget = try XCTUnwrap(coordinator.currentMutationTarget())
+        XCTAssertTrue(currentTarget.archive === prepared.archive)
+        XCTAssertEqual(currentTarget.subdir, "")
+
+        let archiveURL = URL(fileURLWithPath: prepared.archivePath).standardizedFileURL
+        let nestedTarget = try XCTUnwrap(coordinator.mutationTarget(for: archiveURL,
+                                                                    subdir: "folder"))
+        XCTAssertTrue(nestedTarget.archive === prepared.archive)
+        XCTAssertEqual(nestedTarget.subdir, "folder")
+
+        let revalidatedTarget = try XCTUnwrap(coordinator.revalidatedMutationTarget(for: (archive: prepared.archive,
+                                                                                          subdir: "folder")))
+        XCTAssertTrue(revalidatedTarget.archive === prepared.archive)
+        XCTAssertEqual(revalidatedTarget.subdir, "folder")
+
+        let transferTarget = try XCTUnwrap(coordinator.transferTarget(for: prepared.archive,
+                                                                      subdir: "folder"))
+        XCTAssertTrue(transferTarget.archive === prepared.archive)
+        XCTAssertEqual(transferTarget.subdir, "folder")
+        XCTAssertEqual(transferTarget.archiveURL, archiveURL)
+
+        let otherArchiveURL = archiveURL.deletingLastPathComponent().appendingPathComponent("other.7z")
+        XCTAssertNil(coordinator.mutationTarget(for: otherArchiveURL,
+                                                subdir: "folder"))
+    }
+
+    func testCurrentItemWorkflowContextUsesCurrentArchiveDisplayAndQuarantineSource() throws {
+        let session = FileManagerArchiveSession()
+        let prepared = try makePreparedArchive(named: "workflow-context")
+        session.appendPreparedArchive(prepared)
+        let coordinator = makeCoordinator(session: session)
+
+        let context = try XCTUnwrap(coordinator.currentItemWorkflowContext(acquireLease: false,
+                                                                           quarantineSourceArchivePath: "/tmp/source.7z"))
+
+        XCTAssertTrue(context.archive === prepared.archive)
+        XCTAssertEqual(context.hostDirectory, prepared.hostDirectory)
+        XCTAssertEqual(context.displayPathPrefix, prepared.displayPathPrefix)
+        XCTAssertEqual(context.quarantineSourceArchivePath, "/tmp/source.7z")
+        XCTAssertNil(context.archiveOperationLease)
+    }
+
+    func testPrepareExtractionUsesSessionContextAndSelectionMessage() throws {
+        let session = FileManagerArchiveSession()
+        let item = makeArchiveItem(index: 7,
+                                   path: "root/Payload/file.txt")
+        let prepared = try makePreparedArchive(named: "prepare-extraction",
+                                               entries: [item])
+        session.appendPreparedArchive(prepared)
+        XCTAssertTrue(session.navigateSubdir("root"))
+        let coordinator = makeCoordinator(session: session)
+        let destinationURL = URL(fileURLWithPath: "/tmp/Payload", isDirectory: true)
+
+        let extraction = try coordinator.prepareExtraction(of: [item],
+                                                           emptySelectionMessage: "Select something",
+                                                           to: destinationURL,
+                                                           overwriteMode: .ask,
+                                                           pathMode: .currentPaths,
+                                                           password: "secret",
+                                                           preserveNtSecurityInfo: true,
+                                                           eliminateDuplicates: true,
+                                                           inheritDownloadedFileQuarantine: true,
+                                                           quarantineSourceArchivePath: "/tmp/source.7z")
+
+        XCTAssertEqual(extraction.entryIndices.map(\.intValue), [7])
+        XCTAssertEqual(extraction.destinationPath, destinationURL.path)
+        XCTAssertEqual(extraction.settings.pathPrefixToStrip, "root/Payload")
+        XCTAssertEqual(extraction.settings.sourceArchivePathForQuarantine, "/tmp/source.7z")
+        XCTAssertEqual(extraction.settings.password, "secret")
+        XCTAssertTrue(extraction.settings.preserveNtSecurityInfo)
+
+        XCTAssertThrowsError(try coordinator.prepareExtraction(of: [],
+                                                               emptySelectionMessage: "Select something",
+                                                               to: destinationURL,
+                                                               overwriteMode: .ask,
+                                                               pathMode: .currentPaths,
+                                                               password: nil,
+                                                               preserveNtSecurityInfo: false,
+                                                               eliminateDuplicates: false,
+                                                               inheritDownloadedFileQuarantine: false,
+                                                               quarantineSourceArchivePath: nil))
+        { error in
+            XCTAssertEqual((error as NSError).localizedDescription, "Select something")
+        }
+    }
+
     private func makeCoordinator(session: FileManagerArchiveSession,
                                  observerIdentifier: ObjectIdentifier = ObjectIdentifier(NSObject()),
                                  isViewLoaded: @escaping () -> Bool = { false },
@@ -147,7 +241,8 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                  prepareDirectoryForArchivePresentation: @escaping (URL) -> Void = { _ in },
                                  updateTableColumns: @escaping () -> Void = {},
                                  reloadTableData: @escaping () -> Void = {},
-                                 selectArchivePaths: @escaping ([String]) -> Void = { _ in }) -> FileManagerPaneArchiveCoordinator
+                                 selectArchivePaths: @escaping ([String]) -> Void = { _ in },
+                                 hasConflictingNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false }) -> FileManagerPaneArchiveCoordinator
     {
         FileManagerPaneArchiveCoordinator(archiveSession: session,
                                           observerIdentifier: observerIdentifier,
@@ -158,6 +253,7 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                           prepareDirectoryForArchivePresentation: prepareDirectoryForArchivePresentation,
                                           reloadTableData: reloadTableData,
                                           selectArchivePaths: selectArchivePaths,
+                                          hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance,
                                           showError: { error in
                                               XCTFail("Unexpected archive coordinator error: \(error)")
                                           })
@@ -202,10 +298,11 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                               nestedWriteBackInfo: nil)
     }
 
-    private func makeArchiveItem(path: String,
+    private func makeArchiveItem(index: Int = 0,
+                                 path: String,
                                  isDirectory: Bool = false) -> ArchiveItem
     {
-        ArchiveItem(index: 0,
+        ArchiveItem(index: index,
                     path: path,
                     name: path.split(separator: "/").last.map(String.init) ?? path,
                     size: 0,

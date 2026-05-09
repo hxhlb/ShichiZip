@@ -153,6 +153,9 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             selectArchivePaths: { [weak self] paths in
                 self?.selectArchivePaths(paths)
             },
+            hasConflictingNestedArchiveInstance: { [weak self] identity in
+                self?.hasConflictingNestedArchiveInstance(for: identity) == true
+            },
             hasDirtyNestedArchiveInstance: { [weak self] identity in
                 self?.hasDirtyNestedArchiveInstance(for: identity) == true
             },
@@ -165,7 +168,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     var supportsInPlaceArchiveMutation: Bool {
-        archiveSession.supportsInPlaceMutation(hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance(for:))
+        archiveCoordinator.supportsInPlaceMutation()
     }
 
     private var showsRealFileIcons: Bool {
@@ -426,58 +429,29 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     // MARK: - Archive Mutation Targets
 
     func currentArchiveMutationTarget() -> (archive: SZArchive, subdir: String)? {
-        guard let target = archiveSession.currentMutationTarget(hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance(for:)) else { return nil }
-        return (target.archive, target.subdir)
+        archiveCoordinator.currentMutationTarget()
     }
 
     func revalidatedArchiveMutationTarget(for target: (archive: SZArchive, subdir: String)) -> (archive: SZArchive, subdir: String)? {
-        guard let archiveURL = archiveSession.archiveURL(for: target.archive) else {
-            return nil
-        }
-
-        return currentArchiveMutationTarget(for: archiveURL,
-                                            subdir: target.subdir)
+        archiveCoordinator.revalidatedMutationTarget(for: target)
     }
 
     func currentArchiveDestinationDisplayPath() -> String? {
-        guard isInsideArchive, supportsInPlaceArchiveMutation else {
-            return nil
-        }
-        return currentLocationDisplayPath
+        archiveCoordinator.currentDestinationDisplayPath(locationDisplayPath: currentLocationDisplayPath)
     }
 
     func currentArchiveMutationTarget(for archiveURL: URL,
                                       subdir: String) -> (archive: SZArchive, subdir: String)?
     {
-        guard let level = archiveSession.currentLevel,
-              URL(fileURLWithPath: level.archivePath).standardizedFileURL == archiveURL.standardizedFileURL
-        else {
-            return nil
-        }
-
-        guard let target = archiveSession.mutationTarget(for: level,
-                                                         subdir: subdir,
-                                                         hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance(for:))
-        else {
-            return nil
-        }
-
-        return (target.archive, target.subdir)
+        archiveCoordinator.mutationTarget(for: archiveURL,
+                                          subdir: subdir)
     }
 
     private func transferArchiveTarget(for archive: SZArchive,
                                        subdir: String) -> FileManagerPaneArchiveTransferTarget?
     {
-        guard let archiveURL = archiveSession.archiveURL(for: archive),
-              let target = currentArchiveMutationTarget(for: archiveURL,
-                                                        subdir: subdir)
-        else {
-            return nil
-        }
-
-        return FileManagerPaneArchiveTransferTarget(archive: target.archive,
-                                                    subdir: target.subdir,
-                                                    archiveURL: archiveURL)
+        archiveCoordinator.transferTarget(for: archive,
+                                          subdir: subdir)
     }
 
     // MARK: - Command Capabilities
@@ -811,24 +785,19 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     func selectedOrDisplayedArchiveEntriesForExtraction() -> [ArchiveItem] {
-        guard let context = currentArchiveExtractionContext else { return [] }
-
-        let indices = Set(FileManagerArchiveExtraction.entryIndices(for: archiveItemsForSelectionOrDisplayedItems(),
-                                                                    allEntries: context.allEntries).map(\.intValue))
-        return context.allEntries.filter { indices.contains($0.index) }
+        archiveCoordinator.selectedOrDisplayedEntriesForExtraction(from: archiveItemsForSelectionOrDisplayedItems(),
+                                                                   quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     func pathPrefixToStripForCurrentExtraction(destinationURL: URL,
                                                pathMode: SZPathMode,
                                                eliminateDuplicates: Bool) -> String?
     {
-        guard let context = currentArchiveExtractionContext else { return nil }
-
-        return FileManagerArchiveExtraction.pathPrefixToStrip(for: archiveItemsForSelectionOrDisplayedItems(),
-                                                              context: context,
-                                                              destinationURL: destinationURL,
-                                                              pathMode: pathMode,
-                                                              eliminateDuplicates: eliminateDuplicates)
+        archiveCoordinator.pathPrefixToStripForExtraction(items: archiveItemsForSelectionOrDisplayedItems(),
+                                                          destinationURL: destinationURL,
+                                                          pathMode: pathMode,
+                                                          eliminateDuplicates: eliminateDuplicates,
+                                                          quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     func selectedItemNames(limit: Int? = nil) -> [String] {
@@ -1161,19 +1130,17 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                      eliminateDuplicates: Bool = false,
                                      inheritDownloadedFileQuarantine: Bool = SZSettings.bool(.inheritDownloadedFileQuarantine)) throws
     {
-        let selectedItems = selectedArchiveItems()
-        guard !selectedItems.isEmpty else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.selectArchiveItems"))
-        }
-        try extractArchiveItems(selectedItems,
-                                to: destinationURL,
-                                session: session,
-                                overwriteMode: overwriteMode,
-                                pathMode: pathMode,
-                                password: password,
-                                preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                eliminateDuplicates: eliminateDuplicates,
-                                inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
+        try archiveCoordinator.extractArchiveItems(selectedArchiveItems(),
+                                                   emptySelectionMessage: SZL10n.string("app.fileManager.error.selectArchiveItems"),
+                                                   to: destinationURL,
+                                                   session: session,
+                                                   overwriteMode: overwriteMode,
+                                                   pathMode: pathMode,
+                                                   password: password,
+                                                   preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                   eliminateDuplicates: eliminateDuplicates,
+                                                   inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine,
+                                                   quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     func extractCurrentSelectionOrDisplayedArchiveItems(to destinationURL: URL,
@@ -1185,19 +1152,17 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                                         eliminateDuplicates: Bool = false,
                                                         inheritDownloadedFileQuarantine: Bool = SZSettings.bool(.inheritDownloadedFileQuarantine)) throws
     {
-        let itemsToExtract = archiveItemsForSelectionOrDisplayedItems()
-        guard !itemsToExtract.isEmpty else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.noArchiveItemsToExtract"))
-        }
-        try extractArchiveItems(itemsToExtract,
-                                to: destinationURL,
-                                session: session,
-                                overwriteMode: overwriteMode,
-                                pathMode: pathMode,
-                                password: password,
-                                preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                eliminateDuplicates: eliminateDuplicates,
-                                inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
+        try archiveCoordinator.extractArchiveItems(archiveItemsForSelectionOrDisplayedItems(),
+                                                   emptySelectionMessage: SZL10n.string("app.fileManager.error.noArchiveItemsToExtract"),
+                                                   to: destinationURL,
+                                                   session: session,
+                                                   overwriteMode: overwriteMode,
+                                                   pathMode: pathMode,
+                                                   password: password,
+                                                   preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                   eliminateDuplicates: eliminateDuplicates,
+                                                   inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine,
+                                                   quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     func prepareExtraction(to destinationURL: URL,
@@ -1208,31 +1173,25 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                            eliminateDuplicates: Bool = false,
                            inheritDownloadedFileQuarantine: Bool = SZSettings.bool(.inheritDownloadedFileQuarantine)) throws -> FileManagerPreparedExtraction
     {
-        let itemsToExtract = archiveItemsForSelectionOrDisplayedItems()
-        return try prepareExtraction(of: itemsToExtract,
-                                     emptySelectionMessage: SZL10n.string("app.fileManager.error.noArchiveItemsToExtract"),
-                                     to: destinationURL,
-                                     overwriteMode: overwriteMode,
-                                     pathMode: pathMode,
-                                     password: password,
-                                     preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                     eliminateDuplicates: eliminateDuplicates,
-                                     inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
+        try archiveCoordinator.prepareExtraction(of: archiveItemsForSelectionOrDisplayedItems(),
+                                                 emptySelectionMessage: SZL10n.string("app.fileManager.error.noArchiveItemsToExtract"),
+                                                 to: destinationURL,
+                                                 overwriteMode: overwriteMode,
+                                                 pathMode: pathMode,
+                                                 password: password,
+                                                 preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                 eliminateDuplicates: eliminateDuplicates,
+                                                 inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine,
+                                                 quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     func testCurrentArchive(session: SZOperationSession? = nil) throws {
-        guard let level = archiveSession.currentLevel else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
-        }
-        try level.archive.test(with: session)
+        try archiveCoordinator.testCurrentArchive(session: session)
     }
 
     /// Returns the archive handle for the currently open archive, for use off the main actor.
     func currentArchiveForTest() throws -> SZArchive {
-        guard let level = archiveSession.currentLevel else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
-        }
-        return level.archive
+        try archiveCoordinator.currentArchiveForTest()
     }
 
     /// Prepares extraction of the selected archive items (not all displayed items)
@@ -1245,54 +1204,16 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                        eliminateDuplicates: Bool = false,
                                        inheritDownloadedFileQuarantine: Bool = SZSettings.bool(.inheritDownloadedFileQuarantine)) throws -> FileManagerPreparedExtraction
     {
-        let selectedItems = selectedArchiveItems()
-        return try prepareExtraction(of: selectedItems,
-                                     emptySelectionMessage: SZL10n.string("app.fileManager.error.selectArchiveItems"),
-                                     to: destinationURL,
-                                     overwriteMode: overwriteMode,
-                                     pathMode: pathMode,
-                                     password: password,
-                                     preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                     eliminateDuplicates: eliminateDuplicates,
-                                     inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
-    }
-
-    private var currentArchiveExtractionContext: FileManagerArchiveExtractionContext? {
-        archiveSession.currentExtractionContext(quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
-    }
-
-    private func prepareExtraction(of itemsToExtract: [ArchiveItem],
-                                   emptySelectionMessage: String,
-                                   to destinationURL: URL,
-                                   overwriteMode: SZOverwriteMode,
-                                   pathMode: SZPathMode,
-                                   password: String?,
-                                   preserveNtSecurityInfo: Bool,
-                                   eliminateDuplicates: Bool,
-                                   inheritDownloadedFileQuarantine: Bool) throws -> FileManagerPreparedExtraction
-    {
-        guard !itemsToExtract.isEmpty else {
-            throw paneOperationError(emptySelectionMessage)
-        }
-
-        guard let context = currentArchiveExtractionContext else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
-        }
-
-        guard let preparedExtraction = FileManagerArchiveExtraction.prepare(items: itemsToExtract,
-                                                                            context: context,
-                                                                            destinationURL: destinationURL,
-                                                                            overwriteMode: overwriteMode,
-                                                                            pathMode: pathMode,
-                                                                            password: password,
-                                                                            preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                                                            eliminateDuplicates: eliminateDuplicates,
-                                                                            inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
-        else {
-            throw paneOperationError(SZL10n.string("app.fileManager.error.cannotExtractSelected"))
-        }
-
-        return preparedExtraction
+        try archiveCoordinator.prepareExtraction(of: selectedArchiveItems(),
+                                                 emptySelectionMessage: SZL10n.string("app.fileManager.error.selectArchiveItems"),
+                                                 to: destinationURL,
+                                                 overwriteMode: overwriteMode,
+                                                 pathMode: pathMode,
+                                                 password: password,
+                                                 preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                 eliminateDuplicates: eliminateDuplicates,
+                                                 inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine,
+                                                 quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     // MARK: - Menu Validation
@@ -1429,15 +1350,12 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     func archiveHostDirectory() -> URL {
-        archiveSession.currentHostDirectory ?? currentDirectory
+        archiveCoordinator.archiveHostDirectory()
     }
 
     private func currentArchiveItemWorkflowContext(acquireLease: Bool = true) -> FileManagerArchiveItemWorkflowContext? {
-        archiveSession.currentItemWorkflowContext(acquireLease: acquireLease,
-                                                  hostDirectory: archiveHostDirectory(),
-                                                  displayPathPrefix: currentArchiveDisplayPathPrefix(),
-                                                  quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path,
-                                                  hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance(for:))
+        archiveCoordinator.currentItemWorkflowContext(acquireLease: acquireLease,
+                                                      quarantineSourceArchivePath: quarantineSourceArchiveURLForExtraction()?.path)
     }
 
     // MARK: - Archive Coordination
@@ -1637,6 +1555,10 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         }
     }
 
+    private func normalizeArchivePath(_ path: String) -> String {
+        FileManagerArchiveChange.normalizeArchivePath(path)
+    }
+
     // MARK: - External Opening
 
     @discardableResult
@@ -1680,36 +1602,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             }
         }
         return true
-    }
-
-    // MARK: - Archive Path Utilities
-
-    private func normalizeArchivePath(_ path: String) -> String {
-        FileManagerArchiveChange.normalizeArchivePath(path)
-    }
-
-    // MARK: - Archive Extraction Execution
-
-    private func extractArchiveItems(_ itemsToExtract: [ArchiveItem],
-                                     to destinationURL: URL,
-                                     session: SZOperationSession?,
-                                     overwriteMode: SZOverwriteMode,
-                                     pathMode: SZPathMode,
-                                     password: String?,
-                                     preserveNtSecurityInfo: Bool,
-                                     eliminateDuplicates: Bool,
-                                     inheritDownloadedFileQuarantine: Bool) throws
-    {
-        let preparedExtraction = try prepareExtraction(of: itemsToExtract,
-                                                       emptySelectionMessage: SZL10n.string("app.fileManager.error.cannotExtractSelected"),
-                                                       to: destinationURL,
-                                                       overwriteMode: overwriteMode,
-                                                       pathMode: pathMode,
-                                                       password: password,
-                                                       preserveNtSecurityInfo: preserveNtSecurityInfo,
-                                                       eliminateDuplicates: eliminateDuplicates,
-                                                       inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
-        try preparedExtraction.perform(session: session)
     }
 
     // MARK: - Error Presentation

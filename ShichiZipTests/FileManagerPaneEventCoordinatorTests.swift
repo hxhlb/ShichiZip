@@ -8,6 +8,11 @@ import XCTest
 
 @MainActor
 final class FileManagerPaneEventCoordinatorTests: XCTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        try skipIfAffectedByIsolatedDeinitTaskLocalRuntimeBug()
+    }
+
     func testColumnLayoutNotificationsUseObservedTableViewOnly() {
         let notificationCenter = NotificationCenter()
         let tableView = NSTableView()

@@ -14,6 +14,7 @@ final class FileManagerPaneArchiveCoordinator {
     private let updateStatusBar: () -> Void
     private let reloadTableData: () -> Void
     private let selectArchivePaths: ([String]) -> Void
+    private let hasConflictingNestedArchiveInstance: (FileManagerNestedArchiveIdentity) -> Bool
     private let hasDirtyNestedArchiveInstance: (FileManagerNestedArchiveIdentity) -> Bool
     private let showError: (Error) -> Void
 
@@ -32,6 +33,7 @@ final class FileManagerPaneArchiveCoordinator {
          updateStatusBar: @escaping () -> Void = {},
          reloadTableData: @escaping () -> Void = {},
          selectArchivePaths: @escaping ([String]) -> Void,
+         hasConflictingNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false },
          hasDirtyNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false },
          showError: @escaping (Error) -> Void)
     {
@@ -47,6 +49,7 @@ final class FileManagerPaneArchiveCoordinator {
         self.updateStatusBar = updateStatusBar
         self.reloadTableData = reloadTableData
         self.selectArchivePaths = selectArchivePaths
+        self.hasConflictingNestedArchiveInstance = hasConflictingNestedArchiveInstance
         self.hasDirtyNestedArchiveInstance = hasDirtyNestedArchiveInstance
         self.showError = showError
     }
@@ -169,8 +172,181 @@ final class FileManagerPaneArchiveCoordinator {
         reloadTableData()
     }
 
-    private func archiveHostDirectory() -> URL {
+    func archiveHostDirectory() -> URL {
         archiveSession.currentHostDirectory ?? currentDirectory()
+    }
+
+    // MARK: - Command Context
+
+    func supportsInPlaceMutation() -> Bool {
+        archiveSession.supportsInPlaceMutation(hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance)
+    }
+
+    func currentMutationTarget() -> (archive: SZArchive, subdir: String)? {
+        guard let target = archiveSession.currentMutationTarget(hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance) else { return nil }
+        return (target.archive, target.subdir)
+    }
+
+    func revalidatedMutationTarget(for target: (archive: SZArchive, subdir: String)) -> (archive: SZArchive, subdir: String)? {
+        guard let archiveURL = archiveSession.archiveURL(for: target.archive) else { return nil }
+        return mutationTarget(for: archiveURL,
+                              subdir: target.subdir)
+    }
+
+    func currentDestinationDisplayPath(locationDisplayPath: String) -> String? {
+        guard archiveSession.isInsideArchive, supportsInPlaceMutation() else { return nil }
+        return locationDisplayPath
+    }
+
+    func mutationTarget(for archiveURL: URL,
+                        subdir: String) -> (archive: SZArchive, subdir: String)?
+    {
+        guard let level = archiveSession.currentLevel,
+              URL(fileURLWithPath: level.archivePath).standardizedFileURL == archiveURL.standardizedFileURL
+        else {
+            return nil
+        }
+
+        guard let target = archiveSession.mutationTarget(for: level,
+                                                         subdir: subdir,
+                                                         hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance)
+        else {
+            return nil
+        }
+
+        return (target.archive, target.subdir)
+    }
+
+    func transferTarget(for archive: SZArchive,
+                        subdir: String) -> FileManagerPaneArchiveTransferTarget?
+    {
+        guard let archiveURL = archiveSession.archiveURL(for: archive),
+              let target = mutationTarget(for: archiveURL,
+                                          subdir: subdir)
+        else {
+            return nil
+        }
+
+        return FileManagerPaneArchiveTransferTarget(archive: target.archive,
+                                                    subdir: target.subdir,
+                                                    archiveURL: archiveURL)
+    }
+
+    func currentItemWorkflowContext(acquireLease: Bool = true,
+                                    quarantineSourceArchivePath: String?) -> FileManagerArchiveItemWorkflowContext?
+    {
+        archiveSession.currentItemWorkflowContext(acquireLease: acquireLease,
+                                                  hostDirectory: archiveHostDirectory(),
+                                                  displayPathPrefix: currentDisplayPathPrefix(),
+                                                  quarantineSourceArchivePath: quarantineSourceArchivePath,
+                                                  hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance)
+    }
+
+    func selectedOrDisplayedEntriesForExtraction(from items: [ArchiveItem],
+                                                 quarantineSourceArchivePath: String?) -> [ArchiveItem]
+    {
+        guard let context = currentExtractionContext(quarantineSourceArchivePath: quarantineSourceArchivePath) else { return [] }
+
+        let indices = Set(FileManagerArchiveExtraction.entryIndices(for: items,
+                                                                    allEntries: context.allEntries).map(\.intValue))
+        return context.allEntries.filter { indices.contains($0.index) }
+    }
+
+    func pathPrefixToStripForExtraction(items: [ArchiveItem],
+                                        destinationURL: URL,
+                                        pathMode: SZPathMode,
+                                        eliminateDuplicates: Bool,
+                                        quarantineSourceArchivePath: String?) -> String?
+    {
+        guard let context = currentExtractionContext(quarantineSourceArchivePath: quarantineSourceArchivePath) else { return nil }
+
+        return FileManagerArchiveExtraction.pathPrefixToStrip(for: items,
+                                                              context: context,
+                                                              destinationURL: destinationURL,
+                                                              pathMode: pathMode,
+                                                              eliminateDuplicates: eliminateDuplicates)
+    }
+
+    func prepareExtraction(of itemsToExtract: [ArchiveItem],
+                           emptySelectionMessage: String,
+                           to destinationURL: URL,
+                           overwriteMode: SZOverwriteMode,
+                           pathMode: SZPathMode,
+                           password: String?,
+                           preserveNtSecurityInfo: Bool,
+                           eliminateDuplicates: Bool,
+                           inheritDownloadedFileQuarantine: Bool,
+                           quarantineSourceArchivePath: String?) throws -> FileManagerPreparedExtraction
+    {
+        guard !itemsToExtract.isEmpty else {
+            throw operationError(emptySelectionMessage)
+        }
+
+        guard let context = currentExtractionContext(quarantineSourceArchivePath: quarantineSourceArchivePath) else {
+            throw operationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
+        }
+
+        guard let preparedExtraction = FileManagerArchiveExtraction.prepare(items: itemsToExtract,
+                                                                            context: context,
+                                                                            destinationURL: destinationURL,
+                                                                            overwriteMode: overwriteMode,
+                                                                            pathMode: pathMode,
+                                                                            password: password,
+                                                                            preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                                            eliminateDuplicates: eliminateDuplicates,
+                                                                            inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine)
+        else {
+            throw operationError(SZL10n.string("app.fileManager.error.cannotExtractSelected"))
+        }
+
+        return preparedExtraction
+    }
+
+    func extractArchiveItems(_ itemsToExtract: [ArchiveItem],
+                             emptySelectionMessage: String,
+                             to destinationURL: URL,
+                             session: SZOperationSession?,
+                             overwriteMode: SZOverwriteMode,
+                             pathMode: SZPathMode,
+                             password: String?,
+                             preserveNtSecurityInfo: Bool,
+                             eliminateDuplicates: Bool,
+                             inheritDownloadedFileQuarantine: Bool,
+                             quarantineSourceArchivePath: String?) throws
+    {
+        let preparedExtraction = try prepareExtraction(of: itemsToExtract,
+                                                       emptySelectionMessage: emptySelectionMessage,
+                                                       to: destinationURL,
+                                                       overwriteMode: overwriteMode,
+                                                       pathMode: pathMode,
+                                                       password: password,
+                                                       preserveNtSecurityInfo: preserveNtSecurityInfo,
+                                                       eliminateDuplicates: eliminateDuplicates,
+                                                       inheritDownloadedFileQuarantine: inheritDownloadedFileQuarantine,
+                                                       quarantineSourceArchivePath: quarantineSourceArchivePath)
+        try preparedExtraction.perform(session: session)
+    }
+
+    func testCurrentArchive(session: SZOperationSession? = nil) throws {
+        guard let level = archiveSession.currentLevel else {
+            throw operationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
+        }
+        try level.archive.test(with: session)
+    }
+
+    func currentArchiveForTest() throws -> SZArchive {
+        guard let level = archiveSession.currentLevel else {
+            throw operationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
+        }
+        return level.archive
+    }
+
+    private func currentDisplayPathPrefix() -> String {
+        archiveSession.currentDisplayPathPrefix ?? currentDirectory().path
+    }
+
+    private func currentExtractionContext(quarantineSourceArchivePath: String?) -> FileManagerArchiveExtractionContext? {
+        archiveSession.currentExtractionContext(quarantineSourceArchivePath: quarantineSourceArchivePath)
     }
 
     // MARK: - Reloads And Change Propagation
