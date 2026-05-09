@@ -174,6 +174,19 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         archiveCoordinator.supportsInPlaceMutation()
     }
 
+    private lazy var externalOpenService = FileManagerPaneExternalOpenService(
+        scheduleCleanup: { [archiveSession] temporaryDirectory, application in
+            archiveSession.itemWorkflowService.scheduleCleanup(temporaryDirectory,
+                                                               when: application)
+        },
+        cleanupTemporaryDirectory: { [archiveSession] temporaryDirectory in
+            archiveSession.cleanupTemporaryDirectory(temporaryDirectory)
+        },
+        showError: { [weak self] error in
+            self?.showErrorAlert(error)
+        },
+    )
+
     private var suspensionCoordinator: FileManagerPaneSuspensionCoordinator {
         if let suspensionCoordinatorStorage {
             return suspensionCoordinatorStorage
@@ -597,8 +610,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     func openCommandOpenExternallyIfPossible(_ url: URL,
                                              preservingTemporaryDirectory temporaryDirectory: URL? = nil) -> Bool
     {
-        openExternallyIfPossible(url,
-                                 preservingTemporaryDirectory: temporaryDirectory)
+        externalOpenService.openIfPossible(url,
+                                           preservingTemporaryDirectory: temporaryDirectory)
     }
 
     @discardableResult
@@ -606,9 +619,9 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                    withApplicationAt applicationURL: URL,
                                    preservingTemporaryDirectory temporaryDirectory: URL? = nil) -> Bool
     {
-        openExternally(url,
-                       withApplicationAt: applicationURL,
-                       preservingTemporaryDirectory: temporaryDirectory)
+        externalOpenService.open(url,
+                                 withApplicationAt: applicationURL,
+                                 preservingTemporaryDirectory: temporaryDirectory)
     }
 
     func openCommandCleanupTemporaryDirectory(_ temporaryDirectory: URL?) {
@@ -616,7 +629,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     func openCommandUnavailableExternalOpenError(for itemName: String) -> NSError {
-        unavailableExternalOpenError(for: itemName)
+        externalOpenService.unavailableExternalOpenError(for: itemName)
     }
 
     func openCommandShowError(_ error: Error) {
@@ -676,12 +689,12 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     func navigationCommandOpenExternallyIfPossible(_ url: URL,
                                                    preservingTemporaryDirectory temporaryDirectory: URL? = nil) -> Bool
     {
-        openExternallyIfPossible(url,
-                                 preservingTemporaryDirectory: temporaryDirectory)
+        externalOpenService.openIfPossible(url,
+                                           preservingTemporaryDirectory: temporaryDirectory)
     }
 
     func navigationCommandUnavailableExternalOpenError(for itemName: String) -> NSError {
-        unavailableExternalOpenError(for: itemName)
+        externalOpenService.unavailableExternalOpenError(for: itemName)
     }
 
     func navigationCommandShowError(_ error: Error) {
@@ -1521,62 +1534,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         FileManagerArchiveChange.normalizeArchivePath(path)
     }
 
-    // MARK: - External Opening
-
-    @discardableResult
-    private func openExternallyIfPossible(_ url: URL,
-                                          preservingTemporaryDirectory temporaryDirectory: URL? = nil) -> Bool
-    {
-        guard let applicationURL = FileManagerExternalOpenRouter.defaultExternalApplicationURL(for: url) else {
-            return false
-        }
-
-        return openExternally(url,
-                              withApplicationAt: applicationURL,
-                              preservingTemporaryDirectory: temporaryDirectory)
-    }
-
-    @discardableResult
-    private func openExternally(_ url: URL,
-                                withApplicationAt applicationURL: URL,
-                                preservingTemporaryDirectory temporaryDirectory: URL? = nil) -> Bool
-    {
-        let configuration = NSWorkspace.OpenConfiguration()
-        NSWorkspace.shared.open([url], withApplicationAt: applicationURL, configuration: configuration) { [weak self] app, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                if let app {
-                    if let temporaryDirectory {
-                        archiveSession.itemWorkflowService.scheduleCleanup(temporaryDirectory,
-                                                                           when: app)
-                    }
-                    return
-                }
-
-                if let temporaryDirectory {
-                    archiveSession.cleanupTemporaryDirectory(temporaryDirectory)
-                }
-
-                if let error, !FileManagerExternalOpenRouter.shouldSuppressExternalOpenError(error) {
-                    showErrorAlert(error)
-                }
-            }
-        }
-        return true
-    }
-
     // MARK: - Error Presentation
-
-    private func paneOperationError(_ description: String) -> NSError {
-        NSError(domain: SZArchiveErrorDomain,
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: description])
-    }
-
-    private func unavailableExternalOpenError(for itemName: String) -> NSError {
-        paneOperationError(SZL10n.string("app.fileManager.error.noAppToOpen", itemName))
-    }
 
     private func showErrorAlert(_ error: Error) {
         szPresentError(error, for: view.window)
