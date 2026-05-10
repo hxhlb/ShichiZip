@@ -81,7 +81,7 @@ enum FileManagerArchiveCommandSupport {
         }
 
         Task { @MainActor [weak activePane, weak parentWindow] in
-            guard let activePane,
+            guard activePane != nil,
                   let extractResult = await promptForArchiveDestination(from: snapshot,
                                                                         parentWindow: parentWindow),
                   let parentWindow

@@ -2,7 +2,7 @@ import AppKit
 
 @MainActor
 struct FileManagerPaneExternalOpenService {
-    typealias OpenCompletion = (NSRunningApplication?, Error?) -> Void
+    typealias OpenCompletion = @Sendable (NSRunningApplication?, Error?) -> Void
     typealias ApplicationOpener = (URL, URL, NSWorkspace.OpenConfiguration, @escaping OpenCompletion) -> Void
 
     private let defaultApplicationURL: (URL) -> URL?
