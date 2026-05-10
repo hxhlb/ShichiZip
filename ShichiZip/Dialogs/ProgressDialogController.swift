@@ -85,30 +85,46 @@ class ProgressDialogController: NSWindowController, SZProgressDelegate {
         bytesLabel = NSTextField(labelWithString: "")
         bytesLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         bytesLabel.textColor = .secondaryLabelColor
-        bytesLabel.translatesAutoresizingMaskIntoConstraints = false
+        bytesLabel.lineBreakMode = .byTruncatingTail
+        bytesLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         bytesLabel.setAccessibilityIdentifier("progress.bytes")
-        contentView.addSubview(bytesLabel)
 
         speedLabel = NSTextField(labelWithString: "")
         speedLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         speedLabel.textColor = .secondaryLabelColor
-        speedLabel.translatesAutoresizingMaskIntoConstraints = false
         speedLabel.setAccessibilityIdentifier("progress.speed")
-        contentView.addSubview(speedLabel)
 
         elapsedLabel = NSTextField(labelWithString: "")
         elapsedLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         elapsedLabel.textColor = .secondaryLabelColor
-        elapsedLabel.alignment = .right
-        elapsedLabel.translatesAutoresizingMaskIntoConstraints = false
         elapsedLabel.setAccessibilityIdentifier("progress.elapsed")
-        contentView.addSubview(elapsedLabel)
 
         cancelButton = NSButton(title: SZL10n.string("common.cancel"), target: self, action: #selector(cancelClicked(_:)))
-        cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.keyEquivalent = "\u{1b}" // Escape
+        cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.setAccessibilityIdentifier("progress.cancelButton")
         contentView.addSubview(cancelButton)
+
+        // Top metrics row: [bytesLabel] ---spacer--- [speedLabel]
+        let topSpacer = NSView()
+        topSpacer.setContentHuggingPriority(.fittingSizeCompression, for: .horizontal)
+        let topRow = NSStackView(views: [bytesLabel, topSpacer, speedLabel])
+        topRow.orientation = .horizontal
+        topRow.alignment = .firstBaseline
+        topRow.spacing = 8
+
+        // Bottom row: [elapsedLabel]
+        let bottomRow = NSStackView(views: [elapsedLabel])
+        bottomRow.orientation = .horizontal
+
+        // Left column stacking the two text rows
+        let leftColumn = NSStackView(views: [topRow, bottomRow])
+        leftColumn.orientation = .vertical
+        leftColumn.alignment = .leading
+        leftColumn.spacing = 2
+        leftColumn.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(leftColumn)
 
         NSLayoutConstraint.activate([
             operationLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
@@ -123,19 +139,13 @@ class ProgressDialogController: NSWindowController, SZProgressDelegate {
             progressBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             progressBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
 
-            bytesLabel.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 4),
-            bytesLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            leftColumn.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 4),
+            leftColumn.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            leftColumn.trailingAnchor.constraint(equalTo: cancelButton.leadingAnchor, constant: -8),
+            leftColumn.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
 
-            speedLabel.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 4),
-            speedLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -100),
-
-            elapsedLabel.topAnchor.constraint(equalTo: bytesLabel.bottomAnchor, constant: 2),
-            elapsedLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            elapsedLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
-
-            cancelButton.topAnchor.constraint(equalTo: progressBar.bottomAnchor, constant: 4),
+            cancelButton.centerYAnchor.constraint(equalTo: leftColumn.centerYAnchor),
             cancelButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            cancelButton.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16),
         ])
     }
 
