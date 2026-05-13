@@ -62,8 +62,8 @@ final class FileOperationDestinationPicker: NSObject {
         panel.message = SZL10n.string("app.chooseDestination")
         panel.directoryURL = suggestedDirectoryURL()
 
-        if let ownerWindow {
-            panel.beginSheetModal(for: ownerWindow) { [weak self] response in
+        if let sheetParent = szSheetParentWindow(ownerWindow) {
+            panel.beginSheetModal(for: sheetParent) { [weak self] response in
                 guard response == .OK, let url = panel.url else { return }
                 self?.pathField?.stringValue = szNormalizedDestinationDisplayPath(url.standardizedFileURL.path)
             }
@@ -705,7 +705,8 @@ final class FileManagerPaneTransferCoordinator {
             let promise = ArchiveDragPromise(item: item,
                                              context: context.itemWorkflowContext,
                                              operationGate: context.operationGate,
-                                             workflowService: context.workflowService)
+                                             workflowService: context.workflowService,
+                                             parentWindow: host.transferLocation.presentationWindow)
             let provider = NSFilePromiseProvider(fileType: ArchiveDragPromise.fileType(for: item),
                                                  delegate: promise)
             provider.userInfo = promise

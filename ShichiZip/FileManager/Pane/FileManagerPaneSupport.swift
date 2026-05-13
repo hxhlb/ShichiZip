@@ -417,17 +417,20 @@ final class ArchiveDragPromise: NSObject, NSFilePromiseProviderDelegate {
     private let context: FileManagerArchiveItemWorkflowContext
     private let operationGate: FileManagerArchiveOperationGate
     private let workflowService: FileManagerArchiveItemWorkflowService
+    private weak var parentWindow: NSWindow?
     private let promiseQueue: OperationQueue
 
     init(item: ArchiveItem,
          context: FileManagerArchiveItemWorkflowContext,
          operationGate: FileManagerArchiveOperationGate,
-         workflowService: FileManagerArchiveItemWorkflowService)
+         workflowService: FileManagerArchiveItemWorkflowService,
+         parentWindow: NSWindow?)
     {
         self.item = item
         self.context = context
         self.operationGate = operationGate
         self.workflowService = workflowService
+        self.parentWindow = parentWindow
 
         let queue = OperationQueue()
         queue.name = "shichizip.archive-drag-promise"
@@ -485,6 +488,7 @@ final class ArchiveDragPromise: NSObject, NSFilePromiseProviderDelegate {
 
                 let coordinator = ArchiveOperationCoordinator(operationTitle: SZL10n.string("progress.extracting"),
                                                               initialFileName: self.item.path,
+                                                              parentWindow: self.parentWindow,
                                                               deferredDisplay: true)
                 coordinator.start()
                 let session = coordinator.session

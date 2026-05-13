@@ -226,8 +226,8 @@ enum FileManagerArchiveCommandSupport {
                                                      parentWindow: parentWindow)
         }
 
-        if let parentWindow {
-            openPanel.beginSheetModal(for: parentWindow) { response in
+        if let sheetParent = szSheetParentWindow(parentWindow) {
+            openPanel.beginSheetModal(for: sheetParent) { response in
                 guard response == .OK else { return }
                 handleSelection()
             }

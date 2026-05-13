@@ -18,15 +18,19 @@ func szIsUnsupportedArchive(_ error: Error) -> Bool {
     szIsArchiveError(error, code: .unsupportedArchive)
 }
 
+func szSheetParentWindow(_ window: NSWindow?) -> NSWindow? {
+    SZDialogPresenter.sheetParentWindow(for: window)
+}
+
 func szPresentError(_ error: Error, for window: NSWindow?) {
     guard !szIsUserCancellation(error) else { return }
 
     if Thread.isMainThread {
-        SZDialogPresenter.presentError(error as NSError, for: window)
+        SZDialogPresenter.presentError(error as NSError, for: szSheetParentWindow(window))
     } else {
         let window = window
         DispatchQueue.main.async {
-            SZDialogPresenter.presentError(error as NSError, for: window)
+            SZDialogPresenter.presentError(error as NSError, for: szSheetParentWindow(window))
         }
     }
 }
@@ -41,7 +45,7 @@ func szPresentMessage(title: String,
                                          title: title,
                                          message: message,
                                          buttonTitle: SZL10n.string("common.ok"),
-                                         for: window)
+                                         for: szSheetParentWindow(window))
     } else {
         let window = window
         DispatchQueue.main.async {
@@ -49,7 +53,7 @@ func szPresentMessage(title: String,
                                              title: title,
                                              message: message,
                                              buttonTitle: SZL10n.string("common.ok"),
-                                             for: window)
+                                             for: szSheetParentWindow(window))
         }
     }
 }
@@ -81,12 +85,12 @@ func szPromptForPasswordSync(title: String,
 @MainActor
 extension SZModalDialogController {
     func modalResult(for window: NSWindow?) async -> Int {
-        guard let window else {
+        guard let sheetParent = szSheetParentWindow(window) else {
             return runModal()
         }
 
         return await withCheckedContinuation { continuation in
-            beginSheetModal(for: window) { buttonIndex in
+            beginSheetModal(for: sheetParent) { buttonIndex in
                 continuation.resume(returning: buttonIndex)
             }
         }
@@ -108,7 +112,12 @@ func szBeginConfirmation(on window: NSWindow,
                                              accessoryView: nil,
                                              preferredFirstResponder: nil,
                                              cancelButtonIndex: 0)
-    controller.beginSheetModal(for: window) { buttonIndex in
+    guard let sheetParent = szSheetParentWindow(window) else {
+        completion(controller.runModal() == 1)
+        return
+    }
+
+    controller.beginSheetModal(for: sheetParent) { buttonIndex in
         completion(buttonIndex == 1)
     }
 }
@@ -134,7 +143,13 @@ func szBeginTextInput(on window: NSWindow,
                                              accessoryView: inputField,
                                              preferredFirstResponder: inputField,
                                              cancelButtonIndex: 0)
-    controller.beginSheetModal(for: window) { buttonIndex in
+    guard let sheetParent = szSheetParentWindow(window) else {
+        let buttonIndex = controller.runModal()
+        completion(buttonIndex == 1 ? inputField.stringValue : nil)
+        return
+    }
+
+    controller.beginSheetModal(for: sheetParent) { buttonIndex in
         completion(buttonIndex == 1 ? inputField.stringValue : nil)
     }
 }
@@ -170,8 +185,8 @@ func szShowDetailsDialog(title: String,
                                                      preferredFirstResponder: nil,
                                                      cancelButtonIndex: 0)
 
-            if let window {
-                controller.beginSheetModal(for: window) { _ in }
+            if let sheetParent = szSheetParentWindow(window) {
+                controller.beginSheetModal(for: sheetParent) { _ in }
             } else {
                 _ = controller.runModal()
             }

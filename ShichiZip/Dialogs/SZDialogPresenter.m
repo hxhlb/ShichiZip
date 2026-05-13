@@ -337,6 +337,14 @@ static uint32_t SZDialogRoundUpByteCountToGB(uint64_t byteCount) {
 
 @implementation SZDialogPresenter
 
++ (NSWindow*)sheetParentWindowForWindow:(NSWindow*)window {
+    if (!NSThread.isMainThread || !window || !window.isVisible || window.attachedSheet) {
+        return nil;
+    }
+
+    return window;
+}
+
 + (SZDialogStyle)dialogStyleForPromptStyle:(SZOperationPromptStyle)promptStyle {
     switch (promptStyle) {
     case SZOperationPromptStyleWarning:

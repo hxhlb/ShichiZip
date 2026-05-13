@@ -1,5 +1,7 @@
 #import "SZModalDialogController.h"
 
+#import "SZDialogPresenter.h"
+
 static const CGFloat SZModalDialogMinimumContentWidth = 440.0;
 static const CGFloat SZModalDialogMaximumTextColumnWidth = 520.0;
 
@@ -374,18 +376,25 @@ static NSString* SZModalDialogAppDisplayName(void) {
 
 - (void)beginSheetModalForWindow:(NSWindow*)window
                completionHandler:(SZModalDialogCompletionHandler)completionHandler {
+    NSWindow* sheetParent = [SZDialogPresenter sheetParentWindowForWindow:window];
+    if (!sheetParent) {
+        NSInteger buttonIndex = [self runModal];
+        completionHandler(buttonIndex);
+        return;
+    }
+
     self.selfRetainer = self;
     self.completionHandler = completionHandler;
 
-    [window beginSheet:self.window
-        completionHandler:^(__unused NSModalResponse returnCode) {
-            NSInteger buttonIndex = self.selectedButtonIndex;
-            if (self.completionHandler) {
-                self.completionHandler(buttonIndex);
-            }
-            self.completionHandler = nil;
-            self.selfRetainer = nil;
-        }];
+    [sheetParent beginSheet:self.window
+          completionHandler:^(__unused NSModalResponse returnCode) {
+              NSInteger buttonIndex = self.selectedButtonIndex;
+              if (self.completionHandler) {
+                  self.completionHandler(buttonIndex);
+              }
+              self.completionHandler = nil;
+              self.selfRetainer = nil;
+          }];
 
     [self activatePreferredFirstResponder];
 }

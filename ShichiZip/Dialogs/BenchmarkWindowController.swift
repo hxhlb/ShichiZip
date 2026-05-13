@@ -1,6 +1,19 @@
 import Cocoa
 import Darwin
 
+private struct BenchmarkPresentationError: LocalizedError {
+    let title: String
+    let reason: String
+
+    var errorDescription: String? {
+        title
+    }
+
+    var failureReason: String? {
+        reason
+    }
+}
+
 class BenchmarkWindowController: NSWindowController, NSWindowDelegate {
     private struct DictionaryOption {
         let size: UInt64
@@ -552,13 +565,9 @@ class BenchmarkWindowController: NSWindowController, NSWindowDelegate {
         }
 
         if !success, let errorMessage, window?.isVisible == true {
-            let alert = NSAlert()
-            alert.messageText = SZL10n.string("app.benchmark.error")
-            alert.informativeText = errorMessage
-            alert.alertStyle = .warning
-            if let window {
-                alert.beginSheetModal(for: window)
-            }
+            szPresentError(BenchmarkPresentationError(title: SZL10n.string("app.benchmark.error"),
+                                                      reason: errorMessage),
+                           for: window)
         }
     }
 
@@ -635,13 +644,9 @@ class BenchmarkWindowController: NSWindowController, NSWindowDelegate {
         restartBtn.isEnabled = true
         stopBtn.isEnabled = false
 
-        let alert = NSAlert()
-        alert.messageText = SZL10n.string("app.benchmark.insufficientMemory")
-        alert.informativeText = benchmarkMemoryUsageErrorText(required: required)
-        alert.alertStyle = .warning
-        if let window {
-            alert.beginSheetModal(for: window)
-        }
+        szPresentError(BenchmarkPresentationError(title: SZL10n.string("app.benchmark.insufficientMemory"),
+                                                  reason: benchmarkMemoryUsageErrorText(required: required)),
+                       for: window)
     }
 
     private func benchmarkMemoryUsageErrorText(required: UInt64) -> String {

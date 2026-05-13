@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface SZDialogPresenter : NSObject
 
++ (nullable NSWindow*)sheetParentWindowForWindow:(nullable NSWindow*)window;
+
 + (SZDialogStyle)dialogStyleForPromptStyle:(SZOperationPromptStyle)promptStyle;
 
 + (void)presentError:(NSError*)error forWindow:(nullable NSWindow*)window;

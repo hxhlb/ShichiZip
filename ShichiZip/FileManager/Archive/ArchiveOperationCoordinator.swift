@@ -127,7 +127,7 @@ final class ArchiveOperationCoordinator {
             return
         }
 
-        if let parentWindow,
+        if let parentWindow = szSheetParentWindow(parentWindow),
            let progressWindow = progressController.window
         {
             parentWindow.beginSheet(progressWindow) { _ in }

@@ -36,8 +36,8 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
             panel.directoryURL = suggestedDirectoryURL()
             panel.nameFieldStringValue = suggestedFileName()
 
-            if let ownerWindow {
-                panel.beginSheetModal(for: ownerWindow) { [weak self] response in
+            if let sheetParent = szSheetParentWindow(ownerWindow) {
+                panel.beginSheetModal(for: sheetParent) { [weak self] response in
                     guard response == .OK, let url = panel.url else { return }
                     self?.pathField?.stringValue = url.standardizedFileURL.path
                 }
