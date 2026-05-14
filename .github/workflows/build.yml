@@ -14,6 +14,8 @@ jobs:
   source-tarball:
     name: Source Tarball
     runs-on: macos-26
+    outputs:
+      marketing_version: ${{ steps.build_metadata.outputs.marketing_version }}
     steps:
       - name: Check out repository with submodules
         uses: actions/checkout@v6
@@ -33,11 +35,19 @@ jobs:
         run: xcodegen generate
 
       - name: Snapshot build metadata
+        id: build_metadata
         run: |
           commit_count="$(git rev-list --count HEAD)"
           short_hash="$(git rev-parse --short HEAD)"
+          marketing_version="$(ruby -ryaml -e 'puts YAML.load_file("project/specs/base.yml").fetch("settings").fetch("base").fetch("MARKETING_VERSION")')"
+          if [[ -z "$marketing_version" ]]; then
+            echo "MARKETING_VERSION is empty." >&2
+            exit 1
+          fi
+
           printf 'BUILD_COMMIT_COUNT="%s"\nBUILD_SHORT_HASH="%s"\n' \
             "$commit_count" "$short_hash" > .build-metadata
+          echo "marketing_version=$marketing_version" >> "$GITHUB_OUTPUT"
 
       - name: Strip .git directories and files
         run: find . -name '.git*' -exec rm -rf {} +
@@ -289,3 +299,61 @@ jobs:
           name: test-diagnostics-${{ matrix.artifact_prefix }}-${{ matrix.target_arch }}-${{ github.run_attempt }}
           path: build/test-diagnostics/${{ matrix.scheme }}-${{ matrix.target_arch }}
           if-no-files-found: warn
+
+  publish-homebrew-nightly:
+    name: Publish Homebrew Nightly Casks
+    needs: [source-tarball, macos-build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Download app artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ShichiZip*
+          path: ${{ runner.temp }}/homebrew-artifacts
+          merge-multiple: true
+          skip-decompress: true
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: shichizip/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Render nightly casks
+        run: |
+          python3 homebrew-tap/scripts/render_casks.py \
+            --repository "${{ github.repository }}" \
+            --output-dir homebrew-tap/Casks \
+            nightly \
+            --run-id "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            --tag "${{ needs.source-tarball.outputs.marketing_version }}" \
+            --artifact-dir "$RUNNER_TEMP/homebrew-artifacts"
+
+      - name: Update tap casks
+        id: update_tap
+        run: |
+          set -euo pipefail
+
+          git -C homebrew-tap status --short -- Casks
+          if git -C homebrew-tap diff --quiet -- Casks; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit tap update
+        if: steps.update_tap.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Casks/shichizip@nightly.rb Casks/shichizip-zs@nightly.rb
+          git -C homebrew-tap commit -m "update: nightly casks to ${GITHUB_SHA::7}"
+          git -C homebrew-tap push

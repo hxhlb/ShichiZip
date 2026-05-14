@@ -1,0 +1,75 @@
+name: Publish Homebrew Release Casks
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, such as v0.2.0.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Homebrew Release Casks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: shichizip/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RUNNER_TEMP/homebrew-release-artifacts"
+          gh release download "$RELEASE_TAG" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "ShichiZip-${RELEASE_TAG}-*.zip" \
+            --pattern "ShichiZipZS-${RELEASE_TAG}-*.zip" \
+            --dir "$RUNNER_TEMP/homebrew-release-artifacts"
+
+      - name: Render release casks
+        run: |
+          set -euo pipefail
+
+          python3 homebrew-tap/scripts/render_casks.py \
+            --repository "${{ github.repository }}" \
+            --output-dir homebrew-tap/Casks \
+            stable \
+            --tag "${{ github.event.release.tag_name || inputs.tag }}" \
+            --artifact-dir "$RUNNER_TEMP/homebrew-release-artifacts"
+
+      - name: Update tap casks
+        id: update_tap
+        run: |
+          set -euo pipefail
+
+          git -C homebrew-tap status --short -- Casks
+          if git -C homebrew-tap diff --quiet -- Casks; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit tap update
+        if: steps.update_tap.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Casks/shichizip.rb Casks/shichizip-zs.rb
+          git -C homebrew-tap commit -m "update: release casks to ${{ github.event.release.tag_name || inputs.tag }}"
+          git -C homebrew-tap push
