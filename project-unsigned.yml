@@ -5,3 +5,4 @@ include:
   - project/specs/apps.yml
   - project/specs/quick-actions.yml
   - project/specs/schemes.yml
+  - project/specs/unsigned.yml

@@ -39,11 +39,19 @@ Each build is two steps: build the C/C++ static library and the Windows SFX modu
 
 ### 1. Generate the Xcode project
 
+This step can be skipped when building from a release source tarball; `ShichiZip.xcodeproj` and the generated localization files are already in the tarball. You may regenerate it if for instance, you want to use the unsigned variant.
+
 ```sh
 xcodegen generate
 ```
 
-Skip this step when building from a release source tarball; `ShichiZip.xcodeproj` and the generated localization files are already in the tarball.
+The default generated project keeps the normal development signing settings. If you do not have the configured Apple Development certificate, generate an unsigned project:
+
+```sh
+xcodegen generate --spec project-unsigned.yml
+```
+
+The unsigned project disables code signing for Debug and Release. It is useful for local compile validation on a machine without signing identities, but it is not suitable for packaging, release, signature verification, or validating Quick Action app-group behavior. Run `xcodegen generate` again to restore the normal signing project.
 
 ### 2. Build the upstream library with Zig
 
