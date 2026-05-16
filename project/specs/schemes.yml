@@ -1,0 +1,40 @@
+schemes:
+  ShichiZip:
+    build:
+      targets:
+        ShichiZip: all
+    run:
+      config: Debug
+      executable: ShichiZip
+    test:
+      config: Debug
+      targets:
+        - ShichiZipTests
+        - ShichiZipUITests
+    profile:
+      config: Release
+      executable: ShichiZip
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  ShichiZipZS:
+    build:
+      targets:
+        ShichiZipZS: all
+    run:
+      config: Debug
+      executable: ShichiZipZS
+    test:
+      config: Debug
+      targets:
+        - ShichiZipZSTests
+        - ShichiZipZSUITests
+    profile:
+      config: Release
+      executable: ShichiZipZS
+    analyze:
+      config: Debug
+    archive:
+      config: Release
