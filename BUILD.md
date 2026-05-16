@@ -45,13 +45,15 @@ This step can be skipped when building from a release source tarball; `ShichiZip
 xcodegen generate
 ```
 
-The default generated project keeps the normal development signing settings. If you do not have the configured Apple Development certificate, generate an unsigned project:
+The default generated project does not hardcode a development team or signing identity. Local Debug builds may use ad-hoc signing when no team is provided. To validate signed behavior, packaging, signature verification, or Quick Action app-group behavior, configure signing in Xcode or pass a development team to `xcodebuild`.
+
+If you only need local compile validation and want the generated project to disable signing entirely, generate an unsigned project:
 
 ```sh
 SHICHIZIP_UNSIGNED=true xcodegen generate
 ```
 
-The unsigned project uses the same `project.yml` and conditionally includes an unsigned signing overlay. It disables code signing for Debug and Release, which is useful for local compile validation on a machine without signing identities, but it is not suitable for packaging, release, signature verification, or validating Quick Action app-group behavior. Run `xcodegen generate` again without `SHICHIZIP_UNSIGNED` to restore the normal signing project.
+The unsigned project uses the same `project.yml` and conditionally includes an unsigned signing overlay. It disables code signing for Debug and Release, but it is not suitable for packaging, release, signature verification, or validating Quick Action app-group behavior. Run `xcodegen generate` again without `SHICHIZIP_UNSIGNED` to restore the normal signing project.
 
 ### 2. Build the upstream library with Zig
 
