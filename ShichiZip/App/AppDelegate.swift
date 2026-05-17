@@ -351,9 +351,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
                     if defaults.inheritDownloadedFileQuarantine {
                         settings.sourceArchivePathForQuarantine = archiveURL.path
                     }
-                    try archive.extract(toPath: plan.destinationURL.path,
-                                        settings: settings,
-                                        session: session)
+                    try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
+                                                                                  to: plan.destinationURL,
+                                                                                  settings: settings,
+                                                                                  session: session)
                     return plan
                 }
 
