@@ -117,13 +117,18 @@ enum FileManagerPaneMutationCommandSupport {
                 { session in
                     let archive = SZArchive()
                     try archive.open(atPath: url.path, session: session)
+                    defer {
+                        archive.close()
+                    }
                     let settings = SZExtractionSettings()
                     settings.overwriteMode = .ask
                     if SZSettings.bool(.inheritDownloadedFileQuarantine) {
                         settings.sourceArchivePathForQuarantine = url.path
                     }
-                    try archive.extract(toPath: destinationURL.path, settings: settings, session: session)
-                    archive.close()
+                    try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
+                                                                                  to: destinationURL,
+                                                                                  settings: settings,
+                                                                                  session: session)
                 }
                 pane.refresh()
             } catch {

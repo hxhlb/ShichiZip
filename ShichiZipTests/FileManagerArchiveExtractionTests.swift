@@ -77,7 +77,7 @@ final class FileManagerArchiveExtractionTests: XCTestCase {
                                                                           inheritDownloadedFileQuarantine: true))
 
         XCTAssertEqual(prepared.entryIndices.map(\.intValue), [7])
-        XCTAssertEqual(prepared.destinationPath, destinationURL.path)
+        XCTAssertEqual(prepared.destinationURL.path, destinationURL.path)
         XCTAssertEqual(prepared.settings.pathPrefixToStrip, "root/Payload")
         XCTAssertEqual(prepared.settings.sourceArchivePathForQuarantine, "/tmp/source.7z")
         XCTAssertEqual(prepared.settings.password, "secret")

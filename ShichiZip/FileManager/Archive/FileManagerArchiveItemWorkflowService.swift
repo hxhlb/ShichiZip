@@ -1,5 +1,4 @@
 import AppKit
-import Darwin
 import Foundation
 import os
 
@@ -188,25 +187,40 @@ final class FileManagerArchiveItemWorkflowService {
                       session: SZOperationSession?) throws
     {
         let standardizedDestinationURL = destinationURL.standardizedFileURL
-
-        if !item.isDirectory,
-           try extractPromiseDirectlyIfPossible(for: item,
-                                                context: context,
-                                                to: standardizedDestinationURL,
-                                                session: session)
-        {
-            return
+        guard let materialization = try FileManagerExtractionMaterialization.prepareNewDestination(
+            finalURL: standardizedDestinationURL,
+            publishRootIsDirectory: item.isDirectory,
+            fileManager: fileManager)
+        else {
+            throw NSError(domain: NSCocoaErrorDomain,
+                          code: NSFileWriteFileExistsError,
+                          userInfo: [
+                              NSFilePathErrorKey: standardizedDestinationURL.path,
+                              NSLocalizedDescriptionKey: "The promised file already exists.",
+                          ])
         }
 
-        let stagedItem = try stagePromiseItem(for: item,
-                                              context: context,
-                                              session: session)
-        defer {
-            cleanup(stagedItem.temporaryDirectory)
+        var extractionError: Error?
+        do {
+            if item.isDirectory {
+                try extractPromiseDirectory(for: item,
+                                            context: context,
+                                            into: materialization,
+                                            session: session)
+            } else {
+                try extractPromiseFile(for: item,
+                                       context: context,
+                                       into: materialization,
+                                       session: session)
+            }
+        } catch {
+            extractionError = error
+            if !item.isDirectory {
+                try? materialization.moveSidecarItemToPublishRoot(named: item.name)
+            }
         }
 
-        try moveItemPreservingMetadata(from: stagedItem.fileURL,
-                                       to: standardizedDestinationURL)
+        try materialization.finish(operationError: extractionError)
     }
 
     func stageQuickLookItems(_ items: [ArchiveItem],
@@ -279,37 +293,6 @@ final class FileManagerArchiveItemWorkflowService {
         do {
             let settings = stagingExtractionSettings(for: context)
             try context.archive.extractEntries([NSNumber(value: item.index)],
-                                               toPath: temporaryDirectory.path,
-                                               settings: settings,
-                                               session: session)
-
-            let fileURL = try stagedFileURL(for: item,
-                                            in: temporaryDirectory)
-
-            return StagedArchiveItem(temporaryDirectory: temporaryDirectory,
-                                     fileURL: fileURL)
-        } catch {
-            cleanup(temporaryDirectory)
-            throw error
-        }
-    }
-
-    private func stagePromiseItem(for item: ArchiveItem,
-                                  context: FileManagerArchiveItemWorkflowContext,
-                                  session: SZOperationSession?) throws -> StagedArchiveItem
-    {
-        let extractionIndices = try promiseExtractionIndices(for: item,
-                                                             context: context,
-                                                             session: session)
-        guard !extractionIndices.isEmpty else {
-            throw extractionPreparationError()
-        }
-
-        let temporaryDirectory = try createTemporaryDirectory(prefix: FileManagerTemporaryDirectorySupport.dragPrefix)
-
-        do {
-            let settings = stagingExtractionSettings(for: context)
-            try context.archive.extractEntries(extractionIndices,
                                                toPath: temporaryDirectory.path,
                                                settings: settings,
                                                session: session)
@@ -401,46 +384,48 @@ final class FileManagerArchiveItemWorkflowService {
                                                      initialFingerprint: initialFingerprint)
     }
 
-    private func extractPromiseDirectlyIfPossible(for item: ArchiveItem,
-                                                  context: FileManagerArchiveItemWorkflowContext,
-                                                  to destinationURL: URL,
-                                                  session: SZOperationSession?) throws -> Bool
+    private func extractPromiseDirectory(for item: ArchiveItem,
+                                         context: FileManagerArchiveItemWorkflowContext,
+                                         into materialization: FileManagerExtractionMaterialization,
+                                         session: SZOperationSession?) throws
     {
-        let destinationDirectory = destinationURL.deletingLastPathComponent()
-        let extractedURL = destinationDirectory.appendingPathComponent(item.name, isDirectory: false)
-        let standardizedExtractedURL = extractedURL.standardizedFileURL
+        let extractionIndices = try promiseExtractionIndices(for: item,
+                                                             context: context,
+                                                             session: session)
+        guard !extractionIndices.isEmpty else {
+            throw extractionPreparationError()
+        }
 
-        if standardizedExtractedURL != destinationURL,
-           fileManager.fileExists(atPath: standardizedExtractedURL.path)
-        {
-            return false
+        try materialization.createPublishRootDirectoryIfNeeded()
+        let settings = stagingExtractionSettings(for: context)
+        let pathPrefix = normalizeArchivePath(item.path)
+        if !pathPrefix.isEmpty {
+            settings.pathPrefixToStrip = pathPrefix
+        }
+
+        try context.archive.extractEntries(extractionIndices,
+                                           toPath: materialization.publishRootURL.path,
+                                           settings: settings,
+                                           session: session)
+    }
+
+    private func extractPromiseFile(for item: ArchiveItem,
+                                    context: FileManagerArchiveItemWorkflowContext,
+                                    into materialization: FileManagerExtractionMaterialization,
+                                    session: SZOperationSession?) throws
+    {
+        guard item.index >= 0 else {
+            throw extractionPreparationError()
         }
 
         let settings = directPromiseExtractionSettings(for: context)
+        try context.archive.extractEntries([NSNumber(value: item.index)],
+                                           toPath: materialization.sidecarURL.path,
+                                           settings: settings,
+                                           session: session)
 
-        do {
-            try context.archive.extractEntries([NSNumber(value: item.index)],
-                                               toPath: destinationDirectory.path,
-                                               settings: settings,
-                                               session: session)
-
-            guard fileManager.fileExists(atPath: standardizedExtractedURL.path) else {
-                throw extractionPreparationError()
-            }
-
-            if standardizedExtractedURL != destinationURL {
-                try moveItemPreservingMetadata(from: standardizedExtractedURL,
-                                               to: destinationURL)
-            }
-
-            return true
-        } catch {
-            if standardizedExtractedURL != destinationURL,
-               fileManager.fileExists(atPath: standardizedExtractedURL.path)
-            {
-                try? fileManager.removeItem(at: standardizedExtractedURL)
-            }
-            throw error
+        guard try materialization.moveSidecarItemToPublishRoot(named: item.name) else {
+            throw extractionPreparationError()
         }
     }
 
@@ -571,54 +556,5 @@ final class FileManagerArchiveItemWorkflowService {
 
     private func trackedTemporaryDirectories() -> [URL] {
         temporaryDirectoriesState.withLock { Array($0) }
-    }
-
-    private func moveItemPreservingMetadata(from sourceURL: URL,
-                                            to destinationURL: URL) throws
-    {
-        do {
-            try fileManager.moveItem(at: sourceURL, to: destinationURL)
-            return
-        } catch {
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                throw error
-            }
-        }
-
-        try copyItemPreservingMetadata(from: sourceURL, to: destinationURL)
-        try fileManager.removeItem(at: sourceURL)
-    }
-
-    private func copyItemPreservingMetadata(from sourceURL: URL,
-                                            to destinationURL: URL) throws
-    {
-        let cloneResult = sourceURL.path.withCString { sourcePath in
-            destinationURL.path.withCString { destinationPath in
-                copyfile(sourcePath,
-                         destinationPath,
-                         nil,
-                         copyfile_flags_t(COPYFILE_ALL | COPYFILE_CLONE_FORCE))
-            }
-        }
-        if cloneResult == 0 {
-            return
-        }
-
-        let copyResult = sourceURL.path.withCString { sourcePath in
-            destinationURL.path.withCString { destinationPath in
-                copyfile(sourcePath,
-                         destinationPath,
-                         nil,
-                         copyfile_flags_t(COPYFILE_ALL))
-            }
-        }
-        if copyResult == 0 {
-            return
-        }
-
-        let errorCode = errno
-        throw NSError(domain: NSPOSIXErrorDomain,
-                      code: Int(errorCode),
-                      userInfo: [NSLocalizedDescriptionKey: "The promised file could not be written."])
     }
 }

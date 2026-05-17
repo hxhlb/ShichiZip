@@ -6,7 +6,7 @@
 import XCTest
 
 final class ExtractDialogResultBuilderTests: XCTestCase {
-    func testRelativeDestinationCreatesDirectoryUnderBaseDirectory() throws {
+    func testRelativeDestinationResolvesUnderBaseDirectoryWithoutCreatingDirectory() throws {
         let tempRoot = try makeTemporaryDirectory(named: "extract-dialog-relative-destination")
         let builder = ExtractDialogResultBuilder(baseDirectory: tempRoot)
 
@@ -15,7 +15,7 @@ final class ExtractDialogResultBuilderTests: XCTestCase {
 
         XCTAssertEqual(resolved.baseDestinationURL.path, expectedURL.path)
         XCTAssertEqual(resolved.result.destinationURL.path, expectedURL.path)
-        XCTAssertTrue(directoryExists(at: expectedURL))
+        XCTAssertFalse(directoryExists(at: expectedURL))
     }
 
     func testExistingFileDestinationIsRejected() throws {

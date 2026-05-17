@@ -82,7 +82,6 @@ struct ExtractDialogResultBuilder {
             return standardizedURL
         }
 
-        try FileManager.default.createDirectory(at: standardizedURL, withIntermediateDirectories: true)
         return standardizedURL
     }
 

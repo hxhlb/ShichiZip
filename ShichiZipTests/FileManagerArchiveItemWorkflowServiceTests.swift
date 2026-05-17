@@ -74,6 +74,186 @@ final class FileManagerArchiveItemWorkflowServiceTests: XCTestCase {
                                                                         session: SZOperationSession()))
     }
 
+    func testWritePromiseForDirectoryPublishesPromisedDestinationName() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "promise-directory-sidecar")
+        let archiveURL = try makeBundleArchive(named: "Payload.app",
+                                               in: tempRoot)
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: SZOperationSession())
+        defer { archive.close() }
+
+        let rootItem = try XCTUnwrap(archive.entries()
+            .map(ArchiveItem.init(from:))
+            .first { $0.isDirectory && $0.pathParts == ["Payload.app"] })
+        let service = FileManagerArchiveItemWorkflowService(quarantineInheritanceEnabled: { false })
+        let context = workflowContext(archive: archive,
+                                      archiveURL: archiveURL,
+                                      hostDirectory: tempRoot)
+        let dropRoot = tempRoot.appendingPathComponent("drop", isDirectory: true)
+        try FileManager.default.createDirectory(at: dropRoot,
+                                                withIntermediateDirectories: true)
+        let destinationURL = dropRoot.appendingPathComponent("Renamed.app", isDirectory: true)
+
+        try service.writePromise(for: rootItem,
+                                 context: context,
+                                 to: destinationURL,
+                                 session: SZOperationSession())
+
+        XCTAssertEqual(try String(contentsOf: destinationURL.appendingPathComponent("Contents/payload.txt"),
+                                  encoding: .utf8),
+                       "payload")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dropRoot.appendingPathComponent("Payload.app").path))
+        XCTAssertTrue(hiddenSidecarDirectories(in: dropRoot).isEmpty)
+    }
+
+    func testWritePromiseForDirectoryPublishesPartialResultWhenExtractionFails() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "promise-directory-sidecar-partial")
+        let bundleName = "Payload.app"
+        let bundleRoot = tempRoot.appendingPathComponent(bundleName, isDirectory: true)
+        try FileManager.default.createDirectory(at: bundleRoot,
+                                                withIntermediateDirectories: true)
+        try "payload".write(to: bundleRoot.appendingPathComponent("payload.txt"),
+                            atomically: true,
+                            encoding: .utf8)
+        try FileManager.default.createSymbolicLink(atPath: bundleRoot.appendingPathComponent("bad-link").path,
+                                                   withDestinationPath: "../../shichizip-unsafe-target")
+        let archiveURL = tempRoot.appendingPathComponent("payload.zip")
+        try createZipFixture(at: archiveURL,
+                             currentDirectory: tempRoot,
+                             entryPaths: [bundleName,
+                                          "\(bundleName)/payload.txt"])
+        try createZipFixture(at: archiveURL,
+                             currentDirectory: tempRoot,
+                             entryPaths: ["\(bundleName)/bad-link"],
+                             preserveSymlinks: true)
+
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: SZOperationSession())
+        defer { archive.close() }
+
+        let rootItem = try XCTUnwrap(archive.entries()
+            .map(ArchiveItem.init(from:))
+            .first { $0.isDirectory && $0.pathParts == [bundleName] })
+        let service = FileManagerArchiveItemWorkflowService(quarantineInheritanceEnabled: { false })
+        let context = workflowContext(archive: archive,
+                                      archiveURL: archiveURL,
+                                      hostDirectory: tempRoot)
+        let dropRoot = tempRoot.appendingPathComponent("drop", isDirectory: true)
+        try FileManager.default.createDirectory(at: dropRoot,
+                                                withIntermediateDirectories: true)
+        let destinationURL = dropRoot.appendingPathComponent("Renamed.app", isDirectory: true)
+
+        XCTAssertThrowsError(try service.writePromise(for: rootItem,
+                                                      context: context,
+                                                      to: destinationURL,
+                                                      session: SZOperationSession()))
+        XCTAssertEqual(try String(contentsOf: destinationURL.appendingPathComponent("payload.txt"),
+                                  encoding: .utf8),
+                       "payload")
+        XCTAssertTrue(hiddenSidecarDirectories(in: dropRoot).isEmpty)
+    }
+
+    func testPreparedExtractionMaterializesNewDestinationRoot() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "prepared-extraction-sidecar")
+        let archiveURL = try makeBundleArchive(named: "Payload.app",
+                                               in: tempRoot)
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: SZOperationSession())
+        defer { archive.close() }
+
+        let entries = archive.entries().map(ArchiveItem.init(from:))
+        let prepared = try XCTUnwrap(FileManagerArchiveExtraction.prepare(
+            items: entries,
+            context: FileManagerArchiveExtractionContext(archive: archive,
+                                                         allEntries: entries,
+                                                         currentSubdir: "",
+                                                         quarantineSourceArchivePath: nil),
+            destinationURL: tempRoot.appendingPathComponent("Extracted", isDirectory: true),
+            overwriteMode: .overwrite,
+            pathMode: .fullPaths,
+            password: nil,
+            preserveNtSecurityInfo: false,
+            eliminateDuplicates: false,
+            inheritDownloadedFileQuarantine: false,
+        ))
+
+        try prepared.perform(session: SZOperationSession())
+
+        let outputRoot = tempRoot.appendingPathComponent("Extracted", isDirectory: true)
+        XCTAssertEqual(try String(contentsOf: outputRoot.appendingPathComponent("Payload.app/Contents/payload.txt"),
+                                  encoding: .utf8),
+                       "payload")
+        XCTAssertTrue(hiddenSidecarDirectories(in: tempRoot).isEmpty)
+    }
+
+    func testPreparedExtractionKeepsExistingDestinationMergeBehavior() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "prepared-extraction-existing-destination")
+        let archiveURL = try makeBundleArchive(named: "Payload.app",
+                                               in: tempRoot)
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: SZOperationSession())
+        defer { archive.close() }
+
+        let outputRoot = tempRoot.appendingPathComponent("Extracted", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputRoot,
+                                                withIntermediateDirectories: true)
+        try "marker".write(to: outputRoot.appendingPathComponent("marker.txt"),
+                           atomically: true,
+                           encoding: .utf8)
+
+        let entries = archive.entries().map(ArchiveItem.init(from:))
+        let prepared = try XCTUnwrap(FileManagerArchiveExtraction.prepare(
+            items: entries,
+            context: FileManagerArchiveExtractionContext(archive: archive,
+                                                         allEntries: entries,
+                                                         currentSubdir: "",
+                                                         quarantineSourceArchivePath: nil),
+            destinationURL: outputRoot,
+            overwriteMode: .overwrite,
+            pathMode: .fullPaths,
+            password: nil,
+            preserveNtSecurityInfo: false,
+            eliminateDuplicates: false,
+            inheritDownloadedFileQuarantine: false,
+        ))
+
+        try prepared.perform(session: SZOperationSession())
+
+        XCTAssertEqual(try String(contentsOf: outputRoot.appendingPathComponent("marker.txt"),
+                                  encoding: .utf8),
+                       "marker")
+        XCTAssertEqual(try String(contentsOf: outputRoot.appendingPathComponent("Payload.app/Contents/payload.txt"),
+                                  encoding: .utf8),
+                       "payload")
+    }
+
+    func testMaterializationPublishOverwritesRaceCreatedDirectory() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "materialization-race")
+        let finalURL = tempRoot.appendingPathComponent("Output.app", isDirectory: true)
+        let materialization = try XCTUnwrap(try FileManagerExtractionMaterialization.prepareNewDestination(
+            finalURL: finalURL,
+            publishRootIsDirectory: true,
+        ))
+        try materialization.createPublishRootDirectoryIfNeeded()
+        try "new".write(to: materialization.publishRootURL.appendingPathComponent("new.txt"),
+                        atomically: true,
+                        encoding: .utf8)
+
+        try FileManager.default.createDirectory(at: finalURL,
+                                                withIntermediateDirectories: true)
+        try "old".write(to: finalURL.appendingPathComponent("old.txt"),
+                        atomically: true,
+                        encoding: .utf8)
+
+        try materialization.finish(operationError: nil)
+
+        XCTAssertEqual(try String(contentsOf: finalURL.appendingPathComponent("new.txt"),
+                                  encoding: .utf8),
+                       "new")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: finalURL.appendingPathComponent("old.txt").path))
+        XCTAssertTrue(hiddenSidecarDirectories(in: tempRoot).isEmpty)
+    }
+
     private func makeArchiveItem(index: Int,
                                  path: String,
                                  isDirectory: Bool = false) -> ArchiveItem
@@ -95,6 +275,41 @@ final class FileManagerArchiveItemWorkflowServiceTests: XCTestCase {
                     position: 0,
                     block: 0,
                     comment: "")
+    }
+
+    private func makeBundleArchive(named bundleName: String,
+                                   in tempRoot: URL) throws -> URL
+    {
+        let bundleRoot = tempRoot.appendingPathComponent(bundleName, isDirectory: true)
+        let contentsRoot = bundleRoot.appendingPathComponent("Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contentsRoot,
+                                                withIntermediateDirectories: true)
+        try "payload".write(to: contentsRoot.appendingPathComponent("payload.txt"),
+                            atomically: true,
+                            encoding: .utf8)
+        let archiveURL = tempRoot.appendingPathComponent("payload.zip")
+        try createZipFixture(at: archiveURL,
+                             currentDirectory: tempRoot,
+                             entryPaths: [bundleName],
+                             recursive: true)
+        return archiveURL
+    }
+
+    private func workflowContext(archive: SZArchive,
+                                 archiveURL: URL,
+                                 hostDirectory: URL) -> FileManagerArchiveItemWorkflowContext
+    {
+        FileManagerArchiveItemWorkflowContext(archive: archive,
+                                              hostDirectory: hostDirectory,
+                                              displayPathPrefix: archiveURL.path,
+                                              quarantineSourceArchivePath: nil,
+                                              mutationTarget: nil)
+    }
+
+    private func hiddenSidecarDirectories(in directoryURL: URL) -> [URL] {
+        (try? FileManager.default.contentsOfDirectory(at: directoryURL,
+                                                      includingPropertiesForKeys: nil))?
+            .filter { $0.lastPathComponent.hasPrefix(".7zT") } ?? []
     }
 
     func testScheduledExternalCleanupSurvivesPaneCleanupUntilApplicationTerminates() throws {

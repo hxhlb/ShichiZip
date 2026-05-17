@@ -143,7 +143,12 @@ enum FileManagerArchiveCommandSupport {
 
         let destinationTarget: FileOperationDestinationTarget
         do {
-            destinationTarget = try FileOperationDestinationResolver.prepare(unresolvedDestinationTarget)
+            switch unresolvedDestinationTarget {
+            case .directory:
+                destinationTarget = unresolvedDestinationTarget
+            case .archive:
+                destinationTarget = try FileOperationDestinationResolver.prepare(unresolvedDestinationTarget)
+            }
         } catch {
             showError(error)
             return
@@ -296,9 +301,10 @@ enum FileManagerArchiveCommandSupport {
             let settings = extractionSettings(for: result,
                                               archiveURL: archiveURL,
                                               archiveItems: archiveItems)
-            try archive.extract(toPath: result.destinationURL.path,
-                                settings: settings,
-                                session: session)
+            try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
+                                                                          to: result.destinationURL,
+                                                                          settings: settings,
+                                                                          session: session)
         }
     }
 

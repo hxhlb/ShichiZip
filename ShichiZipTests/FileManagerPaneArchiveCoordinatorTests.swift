@@ -213,7 +213,7 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                                            quarantineSourceArchivePath: "/tmp/source.7z")
 
         XCTAssertEqual(extraction.entryIndices.map(\.intValue), [7])
-        XCTAssertEqual(extraction.destinationPath, destinationURL.path)
+        XCTAssertEqual(extraction.destinationURL.path, destinationURL.path)
         XCTAssertEqual(extraction.settings.pathPrefixToStrip, "root/Payload")
         XCTAssertEqual(extraction.settings.sourceArchivePathForQuarantine, "/tmp/source.7z")
         XCTAssertEqual(extraction.settings.password, "secret")
