@@ -32,6 +32,57 @@ final class ArchiveRoundTripTests: XCTestCase {
         return urls
     }
 
+    private func createVersionedFrameworkZipFixture(at archiveURL: URL,
+                                                    in tempRoot: URL) throws -> String
+    {
+        let bundleName = "Payload.app"
+        let frameworkRoot = tempRoot.appendingPathComponent(bundleName)
+            .appendingPathComponent("Contents/Frameworks/Example.framework", isDirectory: true)
+        let versionRoot = frameworkRoot.appendingPathComponent("Versions/A", isDirectory: true)
+        let resourcesRoot = versionRoot.appendingPathComponent("Resources", isDirectory: true)
+
+        try FileManager.default.createDirectory(at: resourcesRoot,
+                                                withIntermediateDirectories: true)
+        try "framework-binary".write(to: versionRoot.appendingPathComponent("Example"),
+                                     atomically: true,
+                                     encoding: .utf8)
+        try "resource".write(to: resourcesRoot.appendingPathComponent("asset.txt"),
+                             atomically: true,
+                             encoding: .utf8)
+        try FileManager.default.createSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Example").path,
+                                                   withDestinationPath: "Versions/Current/Example")
+        try FileManager.default.createSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Resources").path,
+                                                   withDestinationPath: "Versions/Current/Resources")
+        try FileManager.default.createSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Versions/Current").path,
+                                                   withDestinationPath: "A")
+
+        try createZipFixture(at: archiveURL,
+                             currentDirectory: tempRoot,
+                             entryPaths: [bundleName],
+                             recursive: true,
+                             preserveSymlinks: true)
+
+        return bundleName
+    }
+
+    private func assertVersionedFrameworkSymlinksPreserved(in extractedRoot: URL,
+                                                           bundleName: String) throws
+    {
+        let frameworkRoot = extractedRoot.appendingPathComponent(bundleName)
+            .appendingPathComponent("Contents/Frameworks/Example.framework", isDirectory: true)
+
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Example").path),
+                       "Versions/Current/Example")
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Resources").path),
+                       "Versions/Current/Resources")
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: frameworkRoot.appendingPathComponent("Versions/Current").path),
+                       "A")
+
+        let binary = try String(contentsOf: frameworkRoot.appendingPathComponent("Example"),
+                                encoding: .utf8)
+        XCTAssertEqual(binary, "framework-binary")
+    }
+
     // MARK: - Unencrypted round-trip
 
     func testUnencrypted7zRoundTripPreservesPayloadBytes() throws {
@@ -76,6 +127,54 @@ final class ArchiveRoundTripTests: XCTestCase {
             XCTAssertEqual(roundTripped, contents,
                            "byte-for-byte mismatch on extracted src/\(relPath)")
         }
+    }
+
+    func testExtractingZipPreservesVersionedFrameworkSymlinks() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "roundtrip-zip-framework-symlinks")
+        let archiveURL = tempRoot.appendingPathComponent("framework.zip")
+        let bundleName = try createVersionedFrameworkZipFixture(at: archiveURL,
+                                                                in: tempRoot)
+
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: nil)
+        defer { archive.close() }
+
+        let extractDir = tempRoot.appendingPathComponent("extract-all", isDirectory: true)
+        try FileManager.default.createDirectory(at: extractDir,
+                                                withIntermediateDirectories: true)
+        let settings = SZExtractionSettings()
+        settings.pathMode = .fullPaths
+        try archive.extract(toPath: extractDir.path,
+                            settings: settings,
+                            session: nil)
+
+        try assertVersionedFrameworkSymlinksPreserved(in: extractDir,
+                                                      bundleName: bundleName)
+    }
+
+    func testExtractingSelectedZipEntriesPreservesVersionedFrameworkSymlinks() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "roundtrip-zip-selected-framework-symlinks")
+        let archiveURL = tempRoot.appendingPathComponent("framework.zip")
+        let bundleName = try createVersionedFrameworkZipFixture(at: archiveURL,
+                                                                in: tempRoot)
+
+        let archive = SZArchive()
+        try archive.open(atPath: archiveURL.path, session: nil)
+        defer { archive.close() }
+
+        let extractDir = tempRoot.appendingPathComponent("extract-selected", isDirectory: true)
+        try FileManager.default.createDirectory(at: extractDir,
+                                                withIntermediateDirectories: true)
+        let settings = SZExtractionSettings()
+        settings.pathMode = .fullPaths
+        let indices = archive.entries().map { NSNumber(value: $0.index) }
+        try archive.extractEntries(indices,
+                                   toPath: extractDir.path,
+                                   settings: settings,
+                                   session: nil)
+
+        try assertVersionedFrameworkSymlinksPreserved(in: extractDir,
+                                                      bundleName: bundleName)
     }
 
     func testOpeningAndExtractingZipPreservesNonBMPFilenames() throws {

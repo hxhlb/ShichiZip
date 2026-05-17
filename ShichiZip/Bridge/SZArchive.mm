@@ -2237,6 +2237,21 @@ static BOOL EnsureExtractionDirectoryExists(NSString* dest, NSError** error) {
     return NO;
 }
 
+static HRESULT SZExtractAndFinalize(IInArchive* archive,
+    const UInt32* indices,
+    UInt32 numItems,
+    Int32 testMode,
+    IArchiveExtractCallback* archiveExtractCallback,
+    CArchiveExtractCallback* extractCallbackImpl) {
+    CArchiveExtractCallback_Closer extractCallbackCloser(extractCallbackImpl);
+    HRESULT result = archive->Extract(indices, numItems, testMode, archiveExtractCallback);
+    const HRESULT closeResult = extractCallbackCloser.Close();
+    if (result == S_OK) {
+        result = closeResult;
+    }
+    return result;
+}
+
 // MARK: - Extract
 
 - (BOOL)extractToPath:(NSString*)dest
@@ -2296,7 +2311,7 @@ static BOOL EnsureExtractionDirectoryExists(NSString* dest, NSError** error) {
     ecs->Init(ntOptions, NULL, &arc, faeCallback, false, false, us2fs(ToU(dest)),
         removePathParts, false, arc.GetEstmatedPhySize());
 
-    HRESULT r = archive->Extract(nullptr, (UInt32)(Int32)-1, 0, ec);
+    HRESULT r = SZExtractAndFinalize(archive, nullptr, (UInt32)(Int32)-1, 0, ec, ecs);
     [self updateCachedPasswordFromExtractCallback:faeSpec result:r];
     return CheckExtractResult(faeSpec, r, error);
 }
@@ -2372,7 +2387,7 @@ static BOOL EnsureExtractionDirectoryExists(NSString* dest, NSError** error) {
                 SZLocalizedString(@"archive.tooManyItems"));
         return NO;
     }
-    HRESULT r = archive->Extract(ia.data(), (UInt32)ia.size(), 0, ec);
+    HRESULT r = SZExtractAndFinalize(archive, ia.data(), (UInt32)ia.size(), 0, ec, ecs);
     [self updateCachedPasswordFromExtractCallback:faeSpec result:r];
     return CheckExtractResult(faeSpec, r, error);
 }
@@ -2412,7 +2427,7 @@ static BOOL EnsureExtractionDirectoryExists(NSString* dest, NSError** error) {
     ecs->Init(ntOptions, NULL, &arc, faeCallback, false, true, FString(),
         removePathParts, false, arc.GetEstmatedPhySize());
 
-    HRESULT r = archive->Extract(nullptr, (UInt32)(Int32)-1, 1, ec);
+    HRESULT r = SZExtractAndFinalize(archive, nullptr, (UInt32)(Int32)-1, 1, ec, ecs);
     [self updateCachedPasswordFromExtractCallback:faeSpec result:r];
     return CheckExtractResult(faeSpec, r, error);
 }

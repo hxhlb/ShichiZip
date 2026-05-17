@@ -141,7 +141,7 @@ static inline NSString* SZLocalizedStringReplacingPlaceholder(NSString* key,
     NSString* placeholder,
     NSString* _Nullable value) {
     return [SZLocalizedString(key) stringByReplacingOccurrencesOfString:placeholder
-                                                              withString:value ?: @""];
+                                                             withString:value ?: @""];
 }
 
 static inline NSString* SZLocalizedStringWithFirstPlaceholder(NSString* key,

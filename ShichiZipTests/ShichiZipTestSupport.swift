@@ -55,11 +55,20 @@ extension XCTestCase {
     /// `../payload.txt` that are needed to test reader-side path handling.
     func createZipFixture(at archiveURL: URL,
                           currentDirectory: URL,
-                          entryPaths: [String]) throws
+                          entryPaths: [String],
+                          recursive: Bool = false,
+                          preserveSymlinks: Bool = false) throws
     {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        process.arguments = ["-q", "-X", archiveURL.path] + entryPaths
+        var arguments = ["-q", "-X"]
+        if preserveSymlinks {
+            arguments.append("-y")
+        }
+        if recursive {
+            arguments.append("-r")
+        }
+        process.arguments = arguments + [archiveURL.path] + entryPaths
         process.currentDirectoryURL = currentDirectory
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
