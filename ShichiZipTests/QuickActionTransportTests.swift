@@ -165,6 +165,123 @@ final class QuickActionTransportTests: XCTestCase {
                        "Multi-top-level archives should extract into an archive-named directory")
     }
 
+    @MainActor
+    func testSmartQuickExtractViaURLSchemeRenamesConflictingSingleFile() throws {
+        let tempRoot = try makeTemporaryDirectory(named: #function,
+                                                  prefix: "ShichiZipQuickActionTests")
+        let archiveURL = tempRoot.appendingPathComponent("single-file.7z")
+        let sourceDirectory = tempRoot.appendingPathComponent("single-source", isDirectory: true)
+        let payloadURL = sourceDirectory.appendingPathComponent("payload.txt")
+
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "new payload".write(to: payloadURL, atomically: true, encoding: .utf8)
+        try createArchive(at: archiveURL,
+                          from: [payloadURL],
+                          pathMode: .relativePaths)
+        try FileManager.default.removeItem(at: sourceDirectory)
+        try "existing payload".write(to: tempRoot.appendingPathComponent("payload.txt"),
+                                     atomically: true,
+                                     encoding: .utf8)
+
+        let request = ShichiZipQuickActionRequest(action: .smartQuickExtract,
+                                                  fileURLs: [archiveURL])
+        let launchURL = try ShichiZipQuickActionTransport.launchURL(for: request)
+        let appDelegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+
+        appDelegate.application(NSApp, open: [launchURL])
+
+        let renamedPayloadURL = tempRoot.appendingPathComponent("payload 1.txt")
+        waitForFile(at: renamedPayloadURL)
+
+        XCTAssertEqual(try String(contentsOf: renamedPayloadURL, encoding: .utf8),
+                       "new payload")
+        XCTAssertEqual(try String(contentsOf: tempRoot.appendingPathComponent("payload.txt"), encoding: .utf8),
+                       "existing payload")
+    }
+
+    @MainActor
+    func testSmartQuickExtractViaURLSchemeRenamesConflictingSingleDirectoryRoot() throws {
+        let tempRoot = try makeTemporaryDirectory(named: #function,
+                                                  prefix: "ShichiZipQuickActionTests")
+        let bundleName = "Payload.app"
+        let archiveURL = tempRoot.appendingPathComponent("bundle.7z")
+        let bundleRoot = tempRoot.appendingPathComponent(bundleName, isDirectory: true)
+        let contentsRoot = bundleRoot.appendingPathComponent("Contents", isDirectory: true)
+
+        try FileManager.default.createDirectory(at: contentsRoot, withIntermediateDirectories: true)
+        try "new payload".write(to: contentsRoot.appendingPathComponent("payload.txt"),
+                                atomically: true,
+                                encoding: .utf8)
+        try createZipFixture(at: archiveURL,
+                             currentDirectory: tempRoot,
+                             entryPaths: [bundleName],
+                             recursive: true)
+        try FileManager.default.removeItem(at: bundleRoot)
+        try FileManager.default.createDirectory(at: bundleRoot, withIntermediateDirectories: true)
+        try "existing payload".write(to: bundleRoot.appendingPathComponent("existing.txt"),
+                                     atomically: true,
+                                     encoding: .utf8)
+
+        let request = ShichiZipQuickActionRequest(action: .smartQuickExtract,
+                                                  fileURLs: [archiveURL])
+        let launchURL = try ShichiZipQuickActionTransport.launchURL(for: request)
+        let appDelegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+
+        appDelegate.application(NSApp, open: [launchURL])
+
+        let renamedBundleURL = tempRoot.appendingPathComponent("Payload 1.app", isDirectory: true)
+        let renamedPayloadURL = renamedBundleURL.appendingPathComponent("Contents/payload.txt")
+        waitForFile(at: renamedPayloadURL)
+
+        XCTAssertEqual(try String(contentsOf: renamedPayloadURL, encoding: .utf8),
+                       "new payload")
+        XCTAssertEqual(try String(contentsOf: bundleRoot.appendingPathComponent("existing.txt"), encoding: .utf8),
+                       "existing payload")
+    }
+
+    @MainActor
+    func testSmartQuickExtractViaURLSchemeRenamesConflictingMultiRootDestination() throws {
+        let tempRoot = try makeTemporaryDirectory(named: #function,
+                                                  prefix: "ShichiZipQuickActionTests")
+        let archiveURL = tempRoot.appendingPathComponent("multi-file.7z")
+        let sourceDirectory = tempRoot.appendingPathComponent("multi-source", isDirectory: true)
+        let firstPayloadURL = sourceDirectory.appendingPathComponent("first.txt")
+        let secondPayloadURL = sourceDirectory.appendingPathComponent("second.txt")
+        let existingDestinationURL = tempRoot.appendingPathComponent("multi-file", isDirectory: true)
+
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "first payload".write(to: firstPayloadURL, atomically: true, encoding: .utf8)
+        try "second payload".write(to: secondPayloadURL, atomically: true, encoding: .utf8)
+        try createArchive(at: archiveURL,
+                          from: [firstPayloadURL, secondPayloadURL],
+                          pathMode: .relativePaths)
+        try FileManager.default.removeItem(at: sourceDirectory)
+        try FileManager.default.createDirectory(at: existingDestinationURL, withIntermediateDirectories: true)
+        try "existing payload".write(to: existingDestinationURL.appendingPathComponent("existing.txt"),
+                                     atomically: true,
+                                     encoding: .utf8)
+
+        let request = ShichiZipQuickActionRequest(action: .smartQuickExtract,
+                                                  fileURLs: [archiveURL])
+        let launchURL = try ShichiZipQuickActionTransport.launchURL(for: request)
+        let appDelegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+
+        appDelegate.application(NSApp, open: [launchURL])
+
+        let renamedDestinationURL = tempRoot.appendingPathComponent("multi-file 1", isDirectory: true)
+        let firstExtractedURL = renamedDestinationURL.appendingPathComponent("first.txt")
+        let secondExtractedURL = renamedDestinationURL.appendingPathComponent("second.txt")
+        waitForFile(at: firstExtractedURL)
+        waitForFile(at: secondExtractedURL)
+
+        XCTAssertEqual(try String(contentsOf: firstExtractedURL, encoding: .utf8),
+                       "first payload")
+        XCTAssertEqual(try String(contentsOf: secondExtractedURL, encoding: .utf8),
+                       "second payload")
+        XCTAssertEqual(try String(contentsOf: existingDestinationURL.appendingPathComponent("existing.txt"), encoding: .utf8),
+                       "existing payload")
+    }
+
     private func waitForFile(at url: URL,
                              timeout: TimeInterval = 15,
                              pollInterval: TimeInterval = 0.05)

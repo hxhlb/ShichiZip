@@ -46,7 +46,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
     private struct SmartQuickExtractPlan {
         let destinationURL: URL
         let pathPrefixToStrip: String?
-        let extractedItems: [ArchiveItem]
+        let extractionMode: SmartQuickExtractMode
+    }
+
+    private enum SmartQuickExtractMode {
+        case fullArchive
+        case singleFile(index: Int, archivedLeafName: String)
     }
 
     private static var shouldRevealSmartQuickExtractDestination: Bool {
@@ -340,9 +345,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
                     defer { archive.close() }
 
                     let archiveItems = try archive.entries(with: session).map(ArchiveItem.init)
-                    let plan = self.smartQuickExtractPlan(for: archiveURL,
-                                                          archiveItems: archiveItems,
-                                                          eliminateDuplicates: defaults.eliminateDuplicates)
+                    let plan = try self.smartQuickExtractPlan(for: archiveURL,
+                                                              archiveItems: archiveItems,
+                                                              eliminateDuplicates: defaults.eliminateDuplicates)
                     let settings = SZExtractionSettings()
                     settings.overwriteMode = defaults.overwriteMode
                     settings.pathMode = .fullPaths
@@ -351,10 +356,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
                     if defaults.inheritDownloadedFileQuarantine {
                         settings.sourceArchivePathForQuarantine = archiveURL.path
                     }
-                    try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
-                                                                                  to: plan.destinationURL,
-                                                                                  settings: settings,
-                                                                                  session: session)
+                    switch plan.extractionMode {
+                    case .fullArchive:
+                        try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
+                                                                                      to: plan.destinationURL,
+                                                                                      settings: settings,
+                                                                                      session: session)
+
+                    case let .singleFile(index, archivedLeafName):
+                        settings.pathMode = .noPaths
+                        try FileManagerArchiveExtraction.performSingleFileExtraction(archive,
+                                                                                     entryIndex: NSNumber(value: index),
+                                                                                     archivedLeafName: archivedLeafName,
+                                                                                     to: plan.destinationURL,
+                                                                                     settings: settings,
+                                                                                     session: session)
+                    }
                     return plan
                 }
 
@@ -448,24 +465,90 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     private nonisolated func smartQuickExtractPlan(for archiveURL: URL,
                                                    archiveItems: [ArchiveItem],
-                                                   eliminateDuplicates: Bool) -> SmartQuickExtractPlan
+                                                   eliminateDuplicates: Bool) throws -> SmartQuickExtractPlan
     {
         let baseDestinationURL = archiveURL.deletingLastPathComponent().standardizedFileURL
         let suggestedFolderName = archiveURL.deletingPathExtension().lastPathComponent
         let topLevelNames = Set(archiveItems.compactMap(\.pathParts.first).filter { !$0.isEmpty })
-        let usesSplitDestination = topLevelNames.count > 1
-        let destinationURL = usesSplitDestination
+
+        if topLevelNames.count == 1,
+           let topLevelName = topLevelNames.first
+        {
+            let topLevelItems = archiveItems.filter { $0.pathParts.first == topLevelName }
+            let topLevelIsDirectory = topLevelItems.contains { $0.isDirectory || $0.pathParts.count > 1 }
+            if topLevelIsDirectory {
+                let desiredDestinationURL = baseDestinationURL.appendingPathComponent(topLevelName,
+                                                                                      isDirectory: true)
+                let destinationURL = try uniqueDestinationURL(for: desiredDestinationURL,
+                                                              isDirectory: true)
+                return SmartQuickExtractPlan(destinationURL: destinationURL,
+                                             pathPrefixToStrip: topLevelName,
+                                             extractionMode: .fullArchive)
+            }
+
+            let topLevelFiles = topLevelItems.filter { !$0.isDirectory && $0.pathParts.count == 1 && $0.index >= 0 }
+            if topLevelFiles.count == 1,
+               let fileItem = topLevelFiles.first
+            {
+                let desiredDestinationURL = baseDestinationURL.appendingPathComponent(topLevelName,
+                                                                                      isDirectory: false)
+                let destinationURL = try uniqueDestinationURL(for: desiredDestinationURL,
+                                                              isDirectory: false)
+                return SmartQuickExtractPlan(destinationURL: destinationURL,
+                                             pathPrefixToStrip: nil,
+                                             extractionMode: .singleFile(index: fileItem.index,
+                                                                         archivedLeafName: fileItem.name))
+            }
+        }
+
+        let desiredDestinationURL = topLevelNames.count > 1
             ? baseDestinationURL.appendingPathComponent(suggestedFolderName, isDirectory: true).standardizedFileURL
             : baseDestinationURL
-        let pathPrefixToStrip: String? = if usesSplitDestination, eliminateDuplicates {
+        let destinationURL = topLevelNames.count > 1
+            ? try uniqueDestinationURL(for: desiredDestinationURL, isDirectory: true)
+            : desiredDestinationURL
+        let pathPrefixToStrip: String? = if topLevelNames.count > 1, eliminateDuplicates {
             ArchiveItem.duplicateRootPrefixToStrip(for: archiveItems,
                                                    destinationLeafName: destinationURL.lastPathComponent)
         } else {
             nil
         }
-
         return SmartQuickExtractPlan(destinationURL: destinationURL,
                                      pathPrefixToStrip: pathPrefixToStrip,
-                                     extractedItems: archiveItems)
+                                     extractionMode: .fullArchive)
+    }
+
+    private nonisolated func uniqueDestinationURL(for desiredURL: URL,
+                                                  isDirectory: Bool,
+                                                  fileManager: FileManager = .default) throws -> URL
+    {
+        let standardizedDesiredURL = desiredURL.standardizedFileURL
+        guard fileManager.fileExists(atPath: standardizedDesiredURL.path) else {
+            return standardizedDesiredURL
+        }
+
+        let parentURL = standardizedDesiredURL.deletingLastPathComponent()
+        let leafName = standardizedDesiredURL.lastPathComponent
+        let pathExtension = (leafName as NSString).pathExtension
+        let baseName = pathExtension.isEmpty ? leafName : (leafName as NSString).deletingPathExtension
+
+        for suffix in 1 ... 9999 {
+            let candidateName = pathExtension.isEmpty
+                ? "\(baseName) \(suffix)"
+                : "\(baseName) \(suffix).\(pathExtension)"
+            let candidateURL = parentURL.appendingPathComponent(candidateName,
+                                                                isDirectory: isDirectory)
+                .standardizedFileURL
+            if !fileManager.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+        }
+
+        throw NSError(domain: NSCocoaErrorDomain,
+                      code: NSFileWriteFileExistsError,
+                      userInfo: [
+                          NSFilePathErrorKey: standardizedDesiredURL.path,
+                          NSLocalizedDescriptionKey: "A unique extraction destination could not be created.",
+                      ])
     }
 }

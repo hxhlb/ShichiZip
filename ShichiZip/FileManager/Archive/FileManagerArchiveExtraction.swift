@@ -2,6 +2,14 @@ import AppKit
 import Darwin
 import Foundation
 
+/// Writes a new extraction root into a hidden sibling sidecar, then publishes it to the final URL.
+///
+/// This keeps Finder and other observers from seeing incomplete bundles at the destination while
+/// still preserving 7-Zip's partial-output behavior: if extraction fails after producing files,
+/// `finish(operationError:)` publishes whatever reached the sidecar and then rethrows the
+/// original error.
+/// Existing destinations are intentionally not materialized; callers fall back to direct extraction
+/// so directory merge semantics remain unchanged.
 struct FileManagerExtractionMaterialization: @unchecked Sendable {
     private static let visibleSidecarRecoveryAttempts = 16
 
@@ -20,6 +28,8 @@ struct FileManagerExtractionMaterialization: @unchecked Sendable {
         try fileManager.createDirectory(at: parentURL,
                                         withIntermediateDirectories: true)
 
+        // `nil` means the destination existed before extraction started, so the caller should use
+        // the legacy direct path instead of replacing a merge target with a sidecar publish.
         guard !fileManager.fileExists(atPath: standardizedFinalURL.path) else {
             return nil
         }
@@ -107,6 +117,8 @@ struct FileManagerExtractionMaterialization: @unchecked Sendable {
 
     private func publishDirectory() throws {
         if fileManager.fileExists(atPath: finalURL.path) {
+            // A destination created after preflight is treated as an external race. Prefer swapping
+            // so the published tree appears atomically, then delete the raced tree from the sidecar.
             if renameSwap(publishRootURL, finalURL) {
                 try fileManager.removeItem(at: publishRootURL)
                 return
@@ -162,6 +174,7 @@ struct FileManagerExtractionMaterialization: @unchecked Sendable {
             }
 
             do {
+                // Publish failures should leave recoverable output visible to the user.
                 try fileManager.moveItem(at: sidecarURL,
                                          to: visibleURL)
                 noteFileSystemChanged([visibleURL, parentURL])
@@ -277,6 +290,8 @@ struct FileManagerPreparedExtraction: @unchecked Sendable {
             return
         }
 
+        // Absolute-path extraction and existing destinations cannot be represented as a single
+        // publish root, so they keep the original direct extraction behavior.
         try archive.extractEntries(entryIndices,
                                    toPath: destinationURL.path,
                                    settings: settings,
@@ -343,9 +358,46 @@ enum FileManagerArchiveExtraction {
             return
         }
 
+        // Existing destinations keep merge semantics; absolute paths keep their original anchoring.
         try archive.extract(toPath: destinationURL.path,
                             settings: settings,
                             session: session)
+    }
+
+    static func performSingleFileExtraction(_ archive: SZArchive,
+                                            entryIndex: NSNumber,
+                                            archivedLeafName: String,
+                                            to destinationURL: URL,
+                                            settings: SZExtractionSettings,
+                                            session: SZOperationSession?) throws
+    {
+        guard let materialization = try FileManagerExtractionMaterialization.prepareNewDestination(
+            finalURL: destinationURL,
+            publishRootIsDirectory: false,
+        )
+        else {
+            throw NSError(domain: NSCocoaErrorDomain,
+                          code: NSFileWriteFileExistsError,
+                          userInfo: [
+                              NSFilePathErrorKey: destinationURL.path,
+                              NSLocalizedDescriptionKey: "The extraction destination already exists.",
+                          ])
+        }
+
+        var extractionError: Error?
+        do {
+            try archive.extractEntries([entryIndex],
+                                       toPath: materialization.sidecarURL.path,
+                                       settings: settings,
+                                       session: session)
+            // File extraction writes the archived leaf name first; move it to the requested
+            // destination leaf before publishing.
+            _ = try materialization.moveSidecarItemToPublishRoot(named: archivedLeafName)
+        } catch {
+            extractionError = error
+            try? materialization.moveSidecarItemToPublishRoot(named: archivedLeafName)
+        }
+        try materialization.finish(operationError: extractionError)
     }
 
     static func pathPrefixToStrip(for items: [ArchiveItem],
