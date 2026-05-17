@@ -33,6 +33,7 @@
 #include "CPP/7zip/UI/Common/SetProperties.h"
 #include "CPP/7zip/UI/Common/Update.h"
 #include "CPP/7zip/UI/Common/UpdateCallback.h"
+#include "CPP/7zip/UI/Common/WorkDir.h"
 #include "CPP/Common/MyString.h"
 #include "CPP/Common/StringToInt.h"
 #include "CPP/Common/Wildcard.h"
@@ -2254,6 +2255,38 @@ static BOOL EnsureExtractionDirectoryExists(NSString* dest, NSError** error) {
     return NO;
 }
 
+static BOOL SZResolveConfiguredWorkDirForPath(NSString* path, FString& workDir, NSError** error) {
+    workDir.Empty();
+    NWorkDir::CInfo workDirInfo;
+    workDirInfo.Load();
+    if (workDirInfo.Mode == NWorkDir::NMode::kCurrent) {
+        return YES;
+    }
+
+    FString fullPath;
+    if (!NWindows::NFile::NDir::MyGetFullPathName(us2fs(ToU(path)), fullPath)) {
+        if (error) {
+            const HRESULT result = GetLastError_noZero_HRESULT();
+            NSString* failureReason = ToNS(NWindows::NError::MyFormatMessage(result));
+            *error = SZMakeDetailedError(result, SZLocalizedString(@"create.errorFolder"), failureReason);
+        }
+        return NO;
+    }
+
+    FString fileName;
+    workDir = GetWorkDir(workDirInfo, fullPath, fileName);
+    if (NWindows::NFile::NDir::CreateComplexDir(workDir)) {
+        return YES;
+    }
+
+    if (error) {
+        const HRESULT result = GetLastError_noZero_HRESULT();
+        NSString* failureReason = ToNS(NWindows::NError::MyFormatMessage(result));
+        *error = SZMakeDetailedError(result, SZLocalizedString(@"create.errorFolder"), failureReason);
+    }
+    return NO;
+}
+
 static HRESULT SZExtractAndFinalize(IInArchive* archive,
     const UInt32* indices,
     UInt32 numItems,
@@ -3399,6 +3432,10 @@ static bool SZParseVolumeSizes(const UString& text,
     }
     CUpdateErrorInfo errorInfo;
     CObjectVector<COpenType> types;
+
+    if (!SZResolveConfiguredWorkDirForPath(archivePath, options.WorkingDir, error)) {
+        return NO;
+    }
 
     HRESULT r = UpdateArchive(codecs, types, ToU(archivePath), censor, options,
         errorInfo, &openCallbackUI, &callbackUI, true);

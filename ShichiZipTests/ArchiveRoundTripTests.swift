@@ -99,6 +99,29 @@ final class ArchiveRoundTripTests: XCTestCase {
         XCTAssertEqual(binary, "framework-binary")
     }
 
+    private func withCompressionWorkDir(mode: Int,
+                                        path: String,
+                                        removableOnly: Bool,
+                                        _ body: () throws -> Void) throws
+    {
+        let defaults = UserDefaults.standard
+        let keys: [SZSettingsKey] = [.workDirMode, .workDirPath, .workDirRemovableOnly]
+        let previousValues = keys.map { ($0.rawValue, defaults.object(forKey: $0.rawValue)) }
+        defaults.set(mode, forKey: SZSettingsKey.workDirMode.rawValue)
+        defaults.set(path, forKey: SZSettingsKey.workDirPath.rawValue)
+        defaults.set(removableOnly, forKey: SZSettingsKey.workDirRemovableOnly.rawValue)
+        defer {
+            for (key, value) in previousValues {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+        try body()
+    }
+
     // MARK: - Unencrypted round-trip
 
     func testUnencrypted7zRoundTripPreservesPayloadBytes() throws {
@@ -142,6 +165,53 @@ final class ArchiveRoundTripTests: XCTestCase {
             let roundTripped = try String(contentsOf: extractedURL, encoding: .utf8)
             XCTAssertEqual(roundTripped, contents,
                            "byte-for-byte mismatch on extracted src/\(relPath)")
+        }
+    }
+
+    func testCreatingArchiveCreatesSpecifiedWorkingDirectory() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "roundtrip-create-workdir")
+        let sourceRoot = tempRoot.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceRoot,
+                                                withIntermediateDirectories: true)
+        try "payload".write(to: sourceRoot.appendingPathComponent("payload.txt"),
+                            atomically: true,
+                            encoding: .utf8)
+        let archiveURL = tempRoot.appendingPathComponent("out.7z")
+        let workingDir = tempRoot
+            .appendingPathComponent("configured-workdir", isDirectory: true)
+            .appendingPathComponent("nested", isDirectory: true)
+
+        try withCompressionWorkDir(mode: 2,
+                                   path: workingDir.path,
+                                   removableOnly: false)
+        {
+            try createArchive(at: archiveURL, from: [sourceRoot])
+        }
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workingDir.path,
+                                                     isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    func testCreatingArchiveFailsWhenSpecifiedWorkingDirectoryCannotBeCreated() throws {
+        let tempRoot = try makeTemporaryDirectory(named: "roundtrip-create-invalid-workdir")
+        let sourceRoot = tempRoot.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceRoot,
+                                                withIntermediateDirectories: true)
+        try "payload".write(to: sourceRoot.appendingPathComponent("payload.txt"),
+                            atomically: true,
+                            encoding: .utf8)
+        let archiveURL = tempRoot.appendingPathComponent("out.7z")
+        let blockingFile = tempRoot.appendingPathComponent("not-a-directory")
+        try "blocker".write(to: blockingFile, atomically: true, encoding: .utf8)
+        let invalidWorkingDir = blockingFile.appendingPathComponent("child", isDirectory: true)
+
+        try withCompressionWorkDir(mode: 2,
+                                   path: invalidWorkingDir.path,
+                                   removableOnly: false)
+        {
+            XCTAssertThrowsError(try createArchive(at: archiveURL, from: [sourceRoot]))
         }
     }
 
