@@ -483,6 +483,7 @@ final class ArchiveDragPromise: NSObject, NSFilePromiseProviderDelegate {
                 // would block archive close indefinitely.
                 guard let lease = self.operationGate.acquireLease() else {
                     completionHandler.finish(CocoaError(.fileWriteUnknown))
+                    szPresentError(CocoaError(.fileWriteUnknown), for: self.parentWindow)
                     return
                 }
 
@@ -511,6 +512,7 @@ final class ArchiveDragPromise: NSObject, NSFilePromiseProviderDelegate {
                                 completionHandler.finish(nil)
                             case let .failure(error):
                                 completionHandler.finish(error)
+                                szPresentError(error, for: self.parentWindow)
                             }
                         }
                     }

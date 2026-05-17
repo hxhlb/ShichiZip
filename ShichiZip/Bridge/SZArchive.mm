@@ -2189,6 +2189,23 @@ static UStringVector BuildRemovePathParts(NSString* pathPrefixToStrip) {
     return pathParts;
 }
 
+static constexpr unsigned kSZExtractSymLinksDangerousLevelAllowChains = 10;
+
+static CExtractNtOptions SZExtractNtOptionsForSettings(SZExtractionSettings* settings) {
+    CExtractNtOptions ntOptions;
+    if (settings && settings.preserveNtSecurityInfo) {
+        ntOptions.NtSecurity.Def = true;
+        ntOptions.NtSecurity.Val = true;
+    }
+
+    // Level 10 is the lowest level that allows symlink chains while keeping
+    // 7-Zip's lexical checks for paths that escape the extraction root, which
+    // are bypassed only by level 20. macOS versioned frameworks rely on chains
+    // such as Framework -> Versions/Current/Framework and Current -> A.
+    ntOptions.SymLinks_DangerousLevel = kSZExtractSymLinksDangerousLevelAllowChains;
+    return ntOptions;
+}
+
 static BOOL CheckExtractResult(SZFolderExtractCallback* fae, HRESULT r,
     NSError** error) {
     if (r == E_ABORT) {
@@ -2295,11 +2312,7 @@ static HRESULT SZExtractAndFinalize(IInArchive* archive,
 
     CArchiveExtractCallback* ecs = new CArchiveExtractCallback;
     CMyComPtr<IArchiveExtractCallback> ec(ecs);
-    CExtractNtOptions ntOptions;
-    if (s.preserveNtSecurityInfo) {
-        ntOptions.NtSecurity.Def = true;
-        ntOptions.NtSecurity.Val = true;
-    }
+    CExtractNtOptions ntOptions = SZExtractNtOptionsForSettings(s);
     UStringVector removePathParts = BuildRemovePathParts(s.pathPrefixToStrip);
 
     ecs->InitForMulti(false, MapPathMode(s.pathMode),
@@ -2360,11 +2373,7 @@ static HRESULT SZExtractAndFinalize(IInArchive* archive,
 
     CArchiveExtractCallback* ecs = new CArchiveExtractCallback;
     CMyComPtr<IArchiveExtractCallback> ec(ecs);
-    CExtractNtOptions ntOptions;
-    if (s.preserveNtSecurityInfo) {
-        ntOptions.NtSecurity.Def = true;
-        ntOptions.NtSecurity.Val = true;
-    }
+    CExtractNtOptions ntOptions = SZExtractNtOptionsForSettings(s);
     UStringVector removePathParts = BuildRemovePathParts(s.pathPrefixToStrip);
 
     ecs->InitForMulti(false, MapPathMode(s.pathMode),
@@ -2418,7 +2427,7 @@ static HRESULT SZExtractAndFinalize(IInArchive* archive,
 
     CArchiveExtractCallback* ecs = new CArchiveExtractCallback;
     CMyComPtr<IArchiveExtractCallback> ec(ecs);
-    CExtractNtOptions ntOptions;
+    CExtractNtOptions ntOptions = SZExtractNtOptionsForSettings(nil);
     UStringVector removePathParts;
 
     ecs->InitForMulti(false, NExtract::NPathMode::kFullPaths,
