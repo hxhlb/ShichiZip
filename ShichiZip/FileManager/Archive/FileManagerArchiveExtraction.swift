@@ -195,9 +195,7 @@ struct FileManagerExtractionMaterialization: @unchecked Sendable {
     }
 
     private func isDirectory(at url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return fileManager.fileExists(atPath: url.path,
-                                      isDirectory: &isDirectory) && isDirectory.boolValue
+        fileManager.szDirectoryExists(at: url)
     }
 
     private func noPublishedOutputError() -> NSError {

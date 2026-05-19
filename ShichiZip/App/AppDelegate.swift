@@ -421,11 +421,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
             throw ShichiZipQuickActionError.unsupportedSelection(selectionError)
         }
 
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: fileURLs[0].path, isDirectory: &isDirectory) else {
+        guard let itemKind = FileManager.default.szExistingItemKind(at: fileURLs[0]) else {
             throw ShichiZipQuickActionError.unsupportedSelection("The selected file is no longer available.")
         }
-        guard !isDirectory.boolValue else {
+        guard itemKind != .directory else {
             throw ShichiZipQuickActionError.unsupportedSelection(directoryError)
         }
 

@@ -94,9 +94,8 @@ final class FileOperationDestinationPicker: NSObject {
         var probeURL = candidateURL.standardizedFileURL
 
         while true {
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: probeURL.path, isDirectory: &isDirectory) {
-                return isDirectory.boolValue ? probeURL : probeURL.deletingLastPathComponent()
+            if let itemKind = FileManager.default.szExistingItemKind(at: probeURL) {
+                return itemKind == .directory ? probeURL : probeURL.deletingLastPathComponent()
             }
 
             let parentURL = probeURL.deletingLastPathComponent().standardizedFileURL
@@ -278,10 +277,8 @@ enum FileOperationDestinationResolver {
             return archiveTarget
         }
 
-        var isDirectory: ObjCBool = false
-
-        if FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) {
-            guard isDirectory.boolValue else {
+        if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
+            guard itemKind == .directory else {
                 throw NSError(domain: NSCocoaErrorDomain,
                               code: NSFileWriteInvalidFileNameError,
                               userInfo: [
@@ -314,9 +311,8 @@ enum FileOperationDestinationResolver {
         case .archive:
             return destinationTarget
         case let .directory(destinationURL):
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: destinationURL.path, isDirectory: &isDirectory) {
-                guard isDirectory.boolValue else {
+            if let itemKind = FileManager.default.szExistingItemKind(at: destinationURL) {
+                guard itemKind == .directory else {
                     throw NSError(domain: NSCocoaErrorDomain,
                                   code: NSFileWriteInvalidFileNameError,
                                   userInfo: [
@@ -338,12 +334,11 @@ enum FileOperationDestinationResolver {
 
         for componentCount in stride(from: pathComponents.count, through: 1, by: -1) {
             let prefixPath = NSString.path(withComponents: Array(pathComponents.prefix(componentCount)))
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: prefixPath, isDirectory: &isDirectory) else {
+            guard let itemKind = FileManager.default.szExistingItemKind(at: URL(fileURLWithPath: prefixPath)) else {
                 continue
             }
 
-            guard !isDirectory.boolValue else {
+            guard itemKind != .directory else {
                 continue
             }
 

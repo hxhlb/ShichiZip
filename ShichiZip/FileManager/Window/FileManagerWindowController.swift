@@ -266,13 +266,12 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
     @discardableResult
     func openFileSystemItem(_ url: URL, revealWindow: Bool = true) -> Bool {
         let standardizedURL = url.standardizedFileURL
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) else {
+        guard let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) else {
             return false
         }
 
         let targetPane = paneRoutingContext.targetPaneForOpeningFileSystemItem(standardizedURL,
-                                                                               isDirectory: isDirectory.boolValue)
+                                                                               isDirectory: itemKind == .directory)
 
         let opened = targetPane.openFileSystemItemURL(standardizedURL)
         if opened, revealWindow {

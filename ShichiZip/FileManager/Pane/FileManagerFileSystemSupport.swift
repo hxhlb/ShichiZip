@@ -174,12 +174,11 @@ enum FileManagerFileSystemNavigation {
                            fileManager: FileManager = .default) -> FileManagerFileSystemOpenTarget?
     {
         let standardizedURL = url.standardizedFileURL
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) else {
+        guard let itemKind = fileManager.szExistingItemKind(at: standardizedURL) else {
             return nil
         }
 
-        if isDirectory.boolValue {
+        if itemKind == .directory {
             return .directory(standardizedURL)
         }
 
@@ -193,12 +192,11 @@ enum FileManagerFileSystemNavigation {
         let expandedPath = NSString(string: enteredPath).expandingTildeInPath
         let url = URL(fileURLWithPath: expandedPath)
 
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+        guard let itemKind = fileManager.szExistingItemKind(at: url) else {
             return nil
         }
 
-        if isDirectory.boolValue {
+        if itemKind == .directory {
             return .directory(url)
         }
 
@@ -276,14 +274,7 @@ enum FileManagerTransferPathValidation {
                                     fileManager: FileManager) -> Bool
     {
         let normalizedURL = normalizedFileSystemURL(url)
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: normalizedURL.path,
-                                     isDirectory: &isDirectory)
-        else {
-            return false
-        }
-
-        return isDirectory.boolValue
+        return fileManager.szDirectoryExists(at: normalizedURL)
     }
 
     private static func isDescendant(_ url: URL,

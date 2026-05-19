@@ -66,9 +66,8 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
             }
 
             let standardizedURL = candidateURL.standardizedFileURL
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) {
-                return isDirectory.boolValue ? standardizedURL : standardizedURL.deletingLastPathComponent()
+            if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
+                return itemKind == .directory ? standardizedURL : standardizedURL.deletingLastPathComponent()
             }
             return standardizedURL.deletingLastPathComponent()
         }
@@ -598,18 +597,13 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
         }
 
         let parentDirectory = standardizedURL.deletingLastPathComponent()
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: parentDirectory.path, isDirectory: &isDirectory),
-              isDirectory.boolValue
-        else {
+        guard FileManager.default.szDirectoryExists(at: parentDirectory) else {
             throw NSError(domain: NSCocoaErrorDomain,
                           code: NSUserCancelledError,
                           userInfo: [NSLocalizedDescriptionKey: "The destination folder does not exist."])
         }
 
-        if FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory),
-           isDirectory.boolValue
-        {
+        if FileManager.default.szDirectoryExists(at: standardizedURL) {
             throw NSError(domain: NSCocoaErrorDomain,
                           code: NSUserCancelledError,
                           userInfo: [NSLocalizedDescriptionKey: "The archive path points to an existing folder."])

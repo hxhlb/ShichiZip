@@ -68,10 +68,8 @@ struct ExtractDialogResultBuilder {
         }
 
         let standardizedURL = candidateURL.standardizedFileURL
-        var isDirectory: ObjCBool = false
-
-        if FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) {
-            guard isDirectory.boolValue else {
+        if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
+            guard itemKind == .directory else {
                 throw NSError(domain: NSCocoaErrorDomain,
                               code: NSFileWriteInvalidFileNameError,
                               userInfo: [
@@ -160,9 +158,8 @@ final class ExtractDialogContentController: NSObject {
             }
 
             let standardizedURL = candidateURL.standardizedFileURL
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory) {
-                return isDirectory.boolValue ? standardizedURL : standardizedURL.deletingLastPathComponent()
+            if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
+                return itemKind == .directory ? standardizedURL : standardizedURL.deletingLastPathComponent()
             }
 
             return standardizedURL.deletingLastPathComponent()
