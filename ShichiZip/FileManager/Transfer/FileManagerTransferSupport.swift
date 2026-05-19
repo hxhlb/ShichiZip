@@ -62,16 +62,12 @@ final class FileOperationDestinationPicker: NSObject {
         panel.message = SZL10n.string("app.chooseDestination")
         panel.directoryURL = suggestedDirectoryURL()
 
-        if let sheetParent = szSheetParentWindow(ownerWindow) {
-            panel.beginSheetModal(for: sheetParent) { [weak self] response in
-                guard response == .OK, let url = panel.url else { return }
-                self?.pathField?.stringValue = szNormalizedDestinationDisplayPath(url.standardizedFileURL.path)
+        panel.szBeginSheetOrRunModal(for: ownerWindow) { [weak self] response in
+            guard response == .OK, let url = panel.url else {
+                return
             }
-            return
+            self?.pathField?.stringValue = szNormalizedDestinationDisplayPath(url.standardizedFileURL.path)
         }
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        pathField?.stringValue = szNormalizedDestinationDisplayPath(url.standardizedFileURL.path)
     }
 
     private func suggestedDirectoryURL() -> URL {
@@ -84,14 +80,8 @@ final class FileOperationDestinationPicker: NSObject {
             return baseDirectory
         }
 
-        let expandedPath = NSString(string: currentValue).expandingTildeInPath
-        let candidateURL = if NSString(string: expandedPath).isAbsolutePath {
-            URL(fileURLWithPath: expandedPath)
-        } else {
-            URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-        }
-
-        var probeURL = candidateURL.standardizedFileURL
+        var probeURL = szStandardizedFileURL(fromUserPath: currentValue,
+                                             relativeTo: baseDirectory)
 
         while true {
             if let itemKind = FileManager.default.szExistingItemKind(at: probeURL) {
@@ -264,14 +254,8 @@ enum FileOperationDestinationResolver {
                           userInfo: [NSLocalizedDescriptionKey: "Enter a destination folder or archive."])
         }
 
-        let expandedPath = NSString(string: enteredPath).expandingTildeInPath
-        let candidateURL = if NSString(string: expandedPath).isAbsolutePath {
-            URL(fileURLWithPath: expandedPath)
-        } else {
-            URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-        }
-
-        let standardizedURL = candidateURL.standardizedFileURL
+        let standardizedURL = szStandardizedFileURL(fromUserPath: enteredPath,
+                                                    relativeTo: baseDirectory)
 
         if let archiveTarget = try resolveArchiveTarget(from: standardizedURL) {
             return archiveTarget

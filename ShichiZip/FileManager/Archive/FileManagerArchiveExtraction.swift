@@ -393,7 +393,7 @@ enum FileManagerArchiveExtraction {
             _ = try materialization.moveSidecarItemToPublishRoot(named: archivedLeafName)
         } catch {
             extractionError = error
-            try? materialization.moveSidecarItemToPublishRoot(named: archivedLeafName)
+            _ = try? materialization.moveSidecarItemToPublishRoot(named: archivedLeafName)
         }
         try materialization.finish(operationError: extractionError)
     }

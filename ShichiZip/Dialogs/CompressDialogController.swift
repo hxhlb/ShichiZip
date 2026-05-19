@@ -36,16 +36,12 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
             panel.directoryURL = suggestedDirectoryURL()
             panel.nameFieldStringValue = suggestedFileName()
 
-            if let sheetParent = szSheetParentWindow(ownerWindow) {
-                panel.beginSheetModal(for: sheetParent) { [weak self] response in
-                    guard response == .OK, let url = panel.url else { return }
-                    self?.pathField?.stringValue = url.standardizedFileURL.path
+            panel.szBeginSheetOrRunModal(for: ownerWindow) { [weak self] response in
+                guard response == .OK, let url = panel.url else {
+                    return
                 }
-                return
+                self?.pathField?.stringValue = url.standardizedFileURL.path
             }
-
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            pathField?.stringValue = url.standardizedFileURL.path
         }
 
         private func suggestedDirectoryURL() -> URL {
@@ -58,14 +54,8 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
                 return baseDirectory
             }
 
-            let expandedPath = NSString(string: currentValue).expandingTildeInPath
-            let candidateURL = if NSString(string: expandedPath).isAbsolutePath {
-                URL(fileURLWithPath: expandedPath)
-            } else {
-                URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-            }
-
-            let standardizedURL = candidateURL.standardizedFileURL
+            let standardizedURL = szStandardizedFileURL(fromUserPath: currentValue,
+                                                        relativeTo: baseDirectory)
             if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
                 return itemKind == .directory ? standardizedURL : standardizedURL.deletingLastPathComponent()
             }
@@ -582,14 +572,8 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
         let normalizedPath = normalizedArchivePath(from: trimmedPath,
                                                    format: format,
                                                    createSFX: createSFX)
-        let expandedPath = NSString(string: normalizedPath).expandingTildeInPath
-        let archiveURL = if NSString(string: expandedPath).isAbsolutePath {
-            URL(fileURLWithPath: expandedPath)
-        } else {
-            URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-        }
-
-        let standardizedURL = archiveURL.standardizedFileURL
+        let standardizedURL = szStandardizedFileURL(fromUserPath: normalizedPath,
+                                                    relativeTo: baseDirectory)
         guard !standardizedURL.lastPathComponent.isEmpty else {
             throw NSError(domain: NSCocoaErrorDomain,
                           code: NSUserCancelledError,

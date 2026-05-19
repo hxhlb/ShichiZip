@@ -60,14 +60,8 @@ struct ExtractDialogResultBuilder {
                           userInfo: [NSLocalizedDescriptionKey: SZL10n.string("fileop.selectDestination")])
         }
 
-        let expandedPath = NSString(string: trimmedPath).expandingTildeInPath
-        let candidateURL = if NSString(string: expandedPath).isAbsolutePath {
-            URL(fileURLWithPath: expandedPath)
-        } else {
-            URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-        }
-
-        let standardizedURL = candidateURL.standardizedFileURL
+        let standardizedURL = szStandardizedFileURL(fromUserPath: trimmedPath,
+                                                    relativeTo: baseDirectory)
         if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
             guard itemKind == .directory else {
                 throw NSError(domain: NSCocoaErrorDomain,
@@ -128,16 +122,12 @@ final class ExtractDialogContentController: NSObject {
             panel.message = SZL10n.string("app.chooseDestination")
             panel.directoryURL = suggestedDirectoryURL()
 
-            if let sheetParent = szSheetParentWindow(ownerWindow) {
-                panel.beginSheetModal(for: sheetParent) { [weak self] response in
-                    guard response == .OK, let url = panel.url else { return }
-                    self?.pathField?.stringValue = url.standardizedFileURL.path
+            panel.szBeginSheetOrRunModal(for: ownerWindow) { [weak self] response in
+                guard response == .OK, let url = panel.url else {
+                    return
                 }
-                return
+                self?.pathField?.stringValue = url.standardizedFileURL.path
             }
-
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            pathField?.stringValue = url.standardizedFileURL.path
         }
 
         private func suggestedDirectoryURL() -> URL {
@@ -150,14 +140,8 @@ final class ExtractDialogContentController: NSObject {
                 return baseDirectory
             }
 
-            let expandedPath = NSString(string: currentValue).expandingTildeInPath
-            let candidateURL = if NSString(string: expandedPath).isAbsolutePath {
-                URL(fileURLWithPath: expandedPath)
-            } else {
-                URL(fileURLWithPath: expandedPath, relativeTo: baseDirectory)
-            }
-
-            let standardizedURL = candidateURL.standardizedFileURL
+            let standardizedURL = szStandardizedFileURL(fromUserPath: currentValue,
+                                                        relativeTo: baseDirectory)
             if let itemKind = FileManager.default.szExistingItemKind(at: standardizedURL) {
                 return itemKind == .directory ? standardizedURL : standardizedURL.deletingLastPathComponent()
             }

@@ -84,13 +84,20 @@ func szPromptForPasswordSync(title: String,
 
 @MainActor
 extension SZModalDialogController {
-    func modalResult(for window: NSWindow?) async -> Int {
+    func szBeginSheetOrRunModal(for window: NSWindow?,
+                                completionHandler: @escaping @MainActor @Sendable (Int) -> Void)
+    {
         guard let sheetParent = szSheetParentWindow(window) else {
-            return runModal()
+            completionHandler(runModal())
+            return
         }
 
-        return await withCheckedContinuation { continuation in
-            beginSheetModal(for: sheetParent) { buttonIndex in
+        beginSheetModal(for: sheetParent, completionHandler: completionHandler)
+    }
+
+    func modalResult(for window: NSWindow?) async -> Int {
+        await withCheckedContinuation { continuation in
+            szBeginSheetOrRunModal(for: window) { buttonIndex in
                 continuation.resume(returning: buttonIndex)
             }
         }
@@ -112,12 +119,7 @@ func szBeginConfirmation(on window: NSWindow,
                                              accessoryView: nil,
                                              preferredFirstResponder: nil,
                                              cancelButtonIndex: 0)
-    guard let sheetParent = szSheetParentWindow(window) else {
-        completion(controller.runModal() == 1)
-        return
-    }
-
-    controller.beginSheetModal(for: sheetParent) { buttonIndex in
+    controller.szBeginSheetOrRunModal(for: window) { buttonIndex in
         completion(buttonIndex == 1)
     }
 }
@@ -143,14 +145,22 @@ func szBeginTextInput(on window: NSWindow,
                                              accessoryView: inputField,
                                              preferredFirstResponder: inputField,
                                              cancelButtonIndex: 0)
-    guard let sheetParent = szSheetParentWindow(window) else {
-        let buttonIndex = controller.runModal()
+    controller.szBeginSheetOrRunModal(for: window) { buttonIndex in
         completion(buttonIndex == 1 ? inputField.stringValue : nil)
-        return
     }
+}
 
-    controller.beginSheetModal(for: sheetParent) { buttonIndex in
-        completion(buttonIndex == 1 ? inputField.stringValue : nil)
+@MainActor
+extension NSSavePanel {
+    func szBeginSheetOrRunModal(for window: NSWindow?,
+                                completionHandler: @escaping @MainActor @Sendable (NSApplication.ModalResponse) -> Void)
+    {
+        guard let sheetParent = szSheetParentWindow(window) else {
+            completionHandler(runModal())
+            return
+        }
+
+        beginSheetModal(for: sheetParent, completionHandler: completionHandler)
     }
 }
 
@@ -185,11 +195,7 @@ func szShowDetailsDialog(title: String,
                                                      preferredFirstResponder: nil,
                                                      cancelButtonIndex: 0)
 
-            if let sheetParent = szSheetParentWindow(window) {
-                controller.beginSheetModal(for: sheetParent) { _ in }
-            } else {
-                _ = controller.runModal()
-            }
+            controller.szBeginSheetOrRunModal(for: window) { _ in }
         }
     }
 

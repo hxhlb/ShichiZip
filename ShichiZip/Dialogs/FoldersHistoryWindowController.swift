@@ -66,12 +66,8 @@ final class FoldersHistoryWindowController: NSObject, NSTableViewDataSource, NST
                                                  cancelButtonIndex: ButtonIndex.cancel)
         dialogController = controller
         controller.setButtonEnabled(selectedEntry() != nil, at: ButtonIndex.open)
-        if let sheetParent = szSheetParentWindow(window) {
-            controller.beginSheetModal(for: sheetParent) { [weak self] buttonIndex in
-                self?.complete(buttonIndex: buttonIndex)
-            }
-        } else {
-            complete(buttonIndex: controller.runModal())
+        controller.szBeginSheetOrRunModal(for: window) { [weak self] buttonIndex in
+            self?.complete(buttonIndex: buttonIndex)
         }
     }
 

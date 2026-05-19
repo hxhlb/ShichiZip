@@ -217,7 +217,7 @@ final class FileManagerArchiveItemWorkflowService {
         } catch {
             extractionError = error
             if !item.isDirectory {
-                try? materialization.moveSidecarItemToPublishRoot(named: item.name)
+                _ = try? materialization.moveSidecarItemToPublishRoot(named: item.name)
             }
         }
 
