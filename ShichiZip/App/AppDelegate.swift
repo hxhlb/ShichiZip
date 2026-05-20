@@ -1,28 +1,6 @@
 import Cocoa
 import os
 
-struct ArchiveExtractionPostProcessResult {
-    let movedSourceArchiveToTrash: Bool
-}
-
-enum ArchiveExtractionPostProcessor {
-    static func finalizeExtraction(sourceArchiveURL: URL?,
-                                   moveSourceArchiveToTrash: Bool) throws -> ArchiveExtractionPostProcessResult
-    {
-        let standardizedSourceArchiveURL = sourceArchiveURL?.standardizedFileURL
-
-        guard moveSourceArchiveToTrash,
-              let standardizedSourceArchiveURL,
-              FileManager.default.fileExists(atPath: standardizedSourceArchiveURL.path)
-        else {
-            return ArchiveExtractionPostProcessResult(movedSourceArchiveToTrash: false)
-        }
-
-        try FileManager.default.trashItem(at: standardizedSourceArchiveURL, resultingItemURL: nil)
-        return ArchiveExtractionPostProcessResult(movedSourceArchiveToTrash: true)
-    }
-}
-
 private enum AppDelegateTestingOverrides {
     private static let shouldRevealSmartQuickExtractDestinationStorage = OSAllocatedUnfairLock(initialState: nil as Bool?)
 
@@ -35,23 +13,11 @@ private enum AppDelegateTestingOverrides {
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouting {
     private static let disableSmartQuickExtractRevealEnvironmentKey = "SHICHIZIP_DISABLE_SMART_QUICK_EXTRACT_REVEAL"
-    private static let quickActionLogPrefix = "QuickActionTransport"
 
     /// Test-only override for smart quick extract reveal behavior.
     nonisolated static var testingShouldRevealSmartQuickExtractDestinationOverride: Bool? {
         get { AppDelegateTestingOverrides.shouldRevealSmartQuickExtractDestination }
         set { AppDelegateTestingOverrides.shouldRevealSmartQuickExtractDestination = newValue }
-    }
-
-    private struct SmartQuickExtractPlan {
-        let destinationURL: URL
-        let pathPrefixToStrip: String?
-        let extractionMode: SmartQuickExtractMode
-    }
-
-    private enum SmartQuickExtractMode {
-        case fullArchive
-        case singleFile(index: Int, archivedLeafName: String)
     }
 
     private static var shouldRevealSmartQuickExtractDestination: Bool {
@@ -66,12 +32,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         return String(cString: value) != "1"
     }
 
-    private let fileManagerWindowRegistry = FileManagerWindowRegistry()
+    private let fileManagerWindowRegistry: FileManagerWindowRegistry
+    private let quickActionHandler: AppQuickActionHandler
     private var benchmarkWindowController: BenchmarkWindowController?
     private var deleteTemporaryFilesWindowController: DeleteTemporaryFilesWindowController?
     private var settingsWindowController: SettingsWindowController?
     private var pendingDeferredArchiveOpens = 0
     private var shouldPresentInitialFileManager = true
+
+    override init() {
+        let fileManagerWindowRegistry = FileManagerWindowRegistry()
+        self.fileManagerWindowRegistry = fileManagerWindowRegistry
+        quickActionHandler = AppQuickActionHandler(fileManagerWindowRegistry: fileManagerWindowRegistry,
+                                                   shouldRevealSmartQuickExtractDestination: {
+                                                       AppDelegate.shouldRevealSmartQuickExtractDestination
+                                                   })
+        super.init()
+    }
 
     func applicationWillFinishLaunching(_: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -135,8 +112,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
             if url.isFileURL {
                 archiveURLs.append(url)
             } else if ShichiZipQuickActionTransport.canHandle(url) {
-                SZLog.info(Self.quickActionLogPrefix, "received launchURL=\(url.absoluteString)")
-                handleQuickActionLaunchURL(url)
+                quickActionHandler.handleLaunchURL(url)
             }
         }
 
@@ -277,277 +253,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
                             details: details,
                             detailsHeight: 320,
                             for: parentWindow)
-    }
-
-    private func handleQuickActionLaunchURL(_ url: URL) {
-        do {
-            SZLog.info(Self.quickActionLogPrefix, "consuming launchURL=\(url.absoluteString)")
-            let request = try ShichiZipQuickActionTransport.consumeRequest(from: url)
-            SZLog.info(Self.quickActionLogPrefix, "decoded request action=\(request.action.rawValue) paths=\(request.paths.joined(separator: ", "))")
-            NSApp.activate(ignoringOtherApps: true)
-            try handleQuickAction(request)
-        } catch {
-            SZLog.error(Self.quickActionLogPrefix, "failed launchURL=\(url.absoluteString) error=\(String(describing: error))")
-            szPresentError(error, for: NSApp.keyWindow ?? NSApp.mainWindow)
-        }
-    }
-
-    private func handleQuickAction(_ request: ShichiZipQuickActionRequest) throws {
-        switch request.action {
-        case .showInFileManager:
-            try handleShowInFileManagerQuickAction(request)
-        case .openInShichiZip:
-            try handleOpenInShichiZipQuickAction(request)
-        case .smartQuickExtract:
-            try handleSmartQuickExtractQuickAction(request)
-        }
-    }
-
-    private func handleShowInFileManagerQuickAction(_ request: ShichiZipQuickActionRequest) throws {
-        let fileURLs = try existingFileURLs(from: request)
-        let groups = groupedFileSystemItemsByParentDirectory(fileURLs)
-
-        guard !groups.isEmpty else {
-            throw ShichiZipQuickActionError.unsupportedSelection(SZL10n.string("archive.selectOneOrMoreFiles"))
-        }
-
-        for group in groups {
-            SZLog.info(Self.quickActionLogPrefix, "show-in-file-manager opening new window urls=\(group.map(\.path).joined(separator: ", "))")
-            fileManagerWindowRegistry.revealFileSystemItemsInNewWindow(group)
-        }
-    }
-
-    private func handleOpenInShichiZipQuickAction(_ request: ShichiZipQuickActionRequest) throws {
-        let itemURL = try existingSingleURL(from: request,
-                                            selectionError: SZL10n.string("archive.selectOneFile"))
-        SZLog.info(Self.quickActionLogPrefix, "open-in-shichizip opening new window item=\(itemURL.path)")
-        _ = openFileSystemItemInNewFileManager(itemURL)
-    }
-
-    private func handleSmartQuickExtractQuickAction(_ request: ShichiZipQuickActionRequest) throws {
-        let archiveURL = try existingSingleFileURL(from: request,
-                                                   selectionError: SZL10n.string("app.fileManager.selectArchiveToExtract"),
-                                                   directoryError: "Folders cannot be extracted as archives.")
-        let defaults = ExtractDialogController.quickActionDefaults()
-        let parentWindow = NSApp.keyWindow ?? NSApp.mainWindow
-
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            do {
-                let plan = try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("progress.extracting"),
-                                                                initialFileName: archiveURL.lastPathComponent,
-                                                                parentWindow: parentWindow,
-                                                                deferredDisplay: false)
-                { session in
-                    let archive = SZArchive()
-                    try archive.open(atPath: archiveURL.path, session: session)
-                    defer { archive.close() }
-
-                    let archiveItems = try archive.entries(with: session).map(ArchiveItem.init)
-                    let plan = try self.smartQuickExtractPlan(for: archiveURL,
-                                                              archiveItems: archiveItems,
-                                                              eliminateDuplicates: defaults.eliminateDuplicates)
-                    let settings = SZExtractionSettings()
-                    settings.overwriteMode = defaults.overwriteMode
-                    settings.pathMode = .fullPaths
-                    settings.preserveNtSecurityInfo = defaults.preserveNtSecurityInfo
-                    settings.pathPrefixToStrip = plan.pathPrefixToStrip
-                    if defaults.inheritDownloadedFileQuarantine {
-                        settings.sourceArchivePathForQuarantine = archiveURL.path
-                    }
-                    switch plan.extractionMode {
-                    case .fullArchive:
-                        try FileManagerArchiveExtraction.performFullArchiveExtraction(archive,
-                                                                                      to: plan.destinationURL,
-                                                                                      settings: settings,
-                                                                                      session: session)
-
-                    case let .singleFile(index, archivedLeafName):
-                        settings.pathMode = .noPaths
-                        try FileManagerArchiveExtraction.performSingleFileExtraction(archive,
-                                                                                     entryIndex: NSNumber(value: index),
-                                                                                     archivedLeafName: archivedLeafName,
-                                                                                     to: plan.destinationURL,
-                                                                                     settings: settings,
-                                                                                     session: session)
-                    }
-                    return plan
-                }
-
-                let postProcessError: Error?
-                do {
-                    _ = try ArchiveExtractionPostProcessor.finalizeExtraction(sourceArchiveURL: archiveURL,
-                                                                              moveSourceArchiveToTrash: defaults.moveArchiveToTrashAfterExtraction)
-                    postProcessError = nil
-                } catch {
-                    postProcessError = error
-                }
-
-                let baseDirectory = archiveURL.deletingLastPathComponent().standardizedFileURL
-                if Self.shouldRevealSmartQuickExtractDestination {
-                    if plan.destinationURL != baseDirectory {
-                        NSWorkspace.shared.selectFile(plan.destinationURL.path,
-                                                      inFileViewerRootedAtPath: baseDirectory.path)
-                    } else {
-                        NSWorkspace.shared.open(plan.destinationURL)
-                    }
-                }
-
-                if let postProcessError {
-                    szPresentError(postProcessError, for: parentWindow)
-                }
-            } catch {
-                szPresentError(error, for: parentWindow)
-            }
-        }
-    }
-
-    private func existingFileURLs(from request: ShichiZipQuickActionRequest) throws -> [URL] {
-        let fileURLs = request.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
-        guard !fileURLs.isEmpty else {
-            throw ShichiZipQuickActionError.unsupportedSelection("The selected files are no longer available.")
-        }
-
-        return fileURLs
-    }
-
-    private func existingSingleFileURL(from request: ShichiZipQuickActionRequest,
-                                       selectionError: String,
-                                       directoryError: String) throws -> URL
-    {
-        let fileURLs = try existingFileURLs(from: request)
-        guard fileURLs.count == 1 else {
-            throw ShichiZipQuickActionError.unsupportedSelection(selectionError)
-        }
-
-        guard let itemKind = FileManager.default.szExistingItemKind(at: fileURLs[0]) else {
-            throw ShichiZipQuickActionError.unsupportedSelection("The selected file is no longer available.")
-        }
-        guard itemKind != .directory else {
-            throw ShichiZipQuickActionError.unsupportedSelection(directoryError)
-        }
-
-        return fileURLs[0]
-    }
-
-    private func existingSingleURL(from request: ShichiZipQuickActionRequest,
-                                   selectionError: String) throws -> URL
-    {
-        let fileURLs = try existingFileURLs(from: request)
-        guard fileURLs.count == 1 else {
-            throw ShichiZipQuickActionError.unsupportedSelection(selectionError)
-        }
-
-        return fileURLs[0]
-    }
-
-    private func groupedFileSystemItemsByParentDirectory(_ urls: [URL]) -> [[URL]] {
-        var orderedParentPaths: [String] = []
-        var groups: [String: [URL]] = [:]
-
-        for url in urls {
-            let standardizedURL = url.standardizedFileURL
-            let parentDirectory = standardizedURL.deletingLastPathComponent().standardizedFileURL
-            let parentPath = parentDirectory.path
-
-            if groups[parentPath] == nil {
-                groups[parentPath] = []
-                orderedParentPaths.append(parentPath)
-            }
-
-            groups[parentPath]?.append(standardizedURL)
-        }
-
-        return orderedParentPaths.compactMap { groups[$0] }
-    }
-
-    private nonisolated func smartQuickExtractPlan(for archiveURL: URL,
-                                                   archiveItems: [ArchiveItem],
-                                                   eliminateDuplicates: Bool) throws -> SmartQuickExtractPlan
-    {
-        let baseDestinationURL = archiveURL.deletingLastPathComponent().standardizedFileURL
-        let suggestedFolderName = archiveURL.deletingPathExtension().lastPathComponent
-        let topLevelNames = Set(archiveItems.compactMap(\.pathParts.first).filter { !$0.isEmpty })
-
-        if topLevelNames.count == 1,
-           let topLevelName = topLevelNames.first
-        {
-            let topLevelItems = archiveItems.filter { $0.pathParts.first == topLevelName }
-            let topLevelIsDirectory = topLevelItems.contains { $0.isDirectory || $0.pathParts.count > 1 }
-            if topLevelIsDirectory {
-                let desiredDestinationURL = baseDestinationURL.appendingPathComponent(topLevelName,
-                                                                                      isDirectory: true)
-                let destinationURL = try uniqueDestinationURL(for: desiredDestinationURL,
-                                                              isDirectory: true)
-                return SmartQuickExtractPlan(destinationURL: destinationURL,
-                                             pathPrefixToStrip: topLevelName,
-                                             extractionMode: .fullArchive)
-            }
-
-            let topLevelFiles = topLevelItems.filter { !$0.isDirectory && $0.pathParts.count == 1 && $0.index >= 0 }
-            if topLevelFiles.count == 1,
-               let fileItem = topLevelFiles.first
-            {
-                let desiredDestinationURL = baseDestinationURL.appendingPathComponent(topLevelName,
-                                                                                      isDirectory: false)
-                let destinationURL = try uniqueDestinationURL(for: desiredDestinationURL,
-                                                              isDirectory: false)
-                return SmartQuickExtractPlan(destinationURL: destinationURL,
-                                             pathPrefixToStrip: nil,
-                                             extractionMode: .singleFile(index: fileItem.index,
-                                                                         archivedLeafName: fileItem.name))
-            }
-        }
-
-        let desiredDestinationURL = topLevelNames.count > 1
-            ? baseDestinationURL.appendingPathComponent(suggestedFolderName, isDirectory: true).standardizedFileURL
-            : baseDestinationURL
-        let destinationURL = topLevelNames.count > 1
-            ? try uniqueDestinationURL(for: desiredDestinationURL, isDirectory: true)
-            : desiredDestinationURL
-        let pathPrefixToStrip: String? = if topLevelNames.count > 1, eliminateDuplicates {
-            ArchiveItem.duplicateRootPrefixToStrip(for: archiveItems,
-                                                   destinationLeafName: destinationURL.lastPathComponent)
-        } else {
-            nil
-        }
-        return SmartQuickExtractPlan(destinationURL: destinationURL,
-                                     pathPrefixToStrip: pathPrefixToStrip,
-                                     extractionMode: .fullArchive)
-    }
-
-    private nonisolated func uniqueDestinationURL(for desiredURL: URL,
-                                                  isDirectory: Bool,
-                                                  fileManager: FileManager = .default) throws -> URL
-    {
-        let standardizedDesiredURL = desiredURL.standardizedFileURL
-        guard fileManager.fileExists(atPath: standardizedDesiredURL.path) else {
-            return standardizedDesiredURL
-        }
-
-        let parentURL = standardizedDesiredURL.deletingLastPathComponent()
-        let leafName = standardizedDesiredURL.lastPathComponent
-        let pathExtension = (leafName as NSString).pathExtension
-        let baseName = pathExtension.isEmpty ? leafName : (leafName as NSString).deletingPathExtension
-
-        for suffix in 1 ... 9999 {
-            let candidateName = pathExtension.isEmpty
-                ? "\(baseName) \(suffix)"
-                : "\(baseName) \(suffix).\(pathExtension)"
-            let candidateURL = parentURL.appendingPathComponent(candidateName,
-                                                                isDirectory: isDirectory)
-                .standardizedFileURL
-            if !fileManager.fileExists(atPath: candidateURL.path) {
-                return candidateURL
-            }
-        }
-
-        throw NSError(domain: NSCocoaErrorDomain,
-                      code: NSFileWriteFileExistsError,
-                      userInfo: [
-                          NSFilePathErrorKey: standardizedDesiredURL.path,
-                          NSLocalizedDescriptionKey: "A unique extraction destination could not be created.",
-                      ])
     }
 }
