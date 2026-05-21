@@ -53,9 +53,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 
-    func applicationDidFinishLaunching(_: Notification) {
+    func applicationDidFinishLaunching(_ notification: Notification) {
         ShichiZipQuickActionTransport.cleanupStalePayloads()
         MainMenu.setup()
+        let isDefaultLaunch = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
+        if !isDefaultLaunch {
+            launchOpenCoordinator.noteLaunchExpectsExternalOpen()
+        }
         // Delay slightly — if we're opening a file, the document system will handle it
         // Only show file manager if no documents are being opened
         DispatchQueue.main.async { [weak self] in
