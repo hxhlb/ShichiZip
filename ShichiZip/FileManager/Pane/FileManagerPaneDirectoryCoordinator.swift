@@ -171,6 +171,7 @@ final class FileManagerPaneDirectoryCoordinator {
         recordDirectoryVisit(hostDirectory)
         cancelPendingSnapshot()
         tearDownDirectoryWatcher()
+        items.removeAll()
     }
 
     func prepareForSuspension() {

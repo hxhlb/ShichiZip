@@ -438,6 +438,9 @@ final class FileManagerPaneArchiveCoordinator {
 
             if !archiveSession.isInsideArchive {
                 archiveSession.clearDisplayItems()
+                updatePathField()
+                updateStatusBar()
+                reloadTableData()
             } else if isViewLoaded(), let currentLevel = archiveSession.currentLevel {
                 archiveSession.navigateSubdir(currentLevel.currentSubdir)
                 presentCurrentArchiveSubdir()
@@ -462,6 +465,9 @@ final class FileManagerPaneArchiveCoordinator {
             }
         }
         archiveSession.clearDisplayItems()
+        updatePathField()
+        updateStatusBar()
+        reloadTableData()
         updateTableColumns()
         return true
     }

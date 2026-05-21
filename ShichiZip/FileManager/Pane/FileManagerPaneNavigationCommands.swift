@@ -124,6 +124,17 @@ enum FileManagerPaneNavigationCommands {
         }
 
         let fileSystemDirectory = level.filesystemDirectory
+        // Closing the archive is destructive: probe the destination first so a
+        // permission / reachability failure surfaces before we tear the archive
+        // down and leave the pane stranded.
+        do {
+            _ = try FileManager.default.contentsOfDirectory(at: fileSystemDirectory,
+                                                            includingPropertiesForKeys: nil)
+        } catch {
+            pane.navigationCommandShowError(error)
+            return
+        }
+
         guard pane.navigationCommandCloseArchiveLevel(level,
                                                       showError: true)
         else {
