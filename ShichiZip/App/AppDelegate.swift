@@ -37,8 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
     private var benchmarkWindowController: BenchmarkWindowController?
     private var deleteTemporaryFilesWindowController: DeleteTemporaryFilesWindowController?
     private var settingsWindowController: SettingsWindowController?
-    private var pendingDeferredArchiveOpens = 0
-    private var shouldPresentInitialFileManager = true
+    private let launchOpenCoordinator = LaunchOpenCoordinator()
 
     override init() {
         let fileManagerWindowRegistry = FileManagerWindowRegistry()
@@ -61,8 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         // Only show file manager if no documents are being opened
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if shouldPresentInitialFileManager,
-               pendingDeferredArchiveOpens == 0,
+            if !launchOpenCoordinator.shouldSuppressInitialFileManager,
                NSDocumentController.shared.documents.isEmpty,
                NSApp.windows.filter(\.isVisible).isEmpty
             {
@@ -97,14 +95,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     /// Handle files dropped onto dock icon
     func application(_: NSApplication, openFiles filenames: [String]) {
-        beginDeferredArchiveOpen()
-        defer { endDeferredArchiveOpen() }
+        beginExternalArchiveOpen()
+        defer { endExternalArchiveOpen() }
         let urls = filenames.map { URL(fileURLWithPath: $0) }
         openArchiveURLs(urls, preferReusableWindow: false)
     }
 
     func application(_: NSApplication, open urls: [URL]) {
-        shouldPresentInitialFileManager = false
+        launchOpenCoordinator.suppressInitialFileManager()
 
         var archiveURLs: [URL] = []
 
@@ -118,8 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
         guard !archiveURLs.isEmpty else { return }
 
-        beginDeferredArchiveOpen()
-        defer { endDeferredArchiveOpen() }
+        beginExternalArchiveOpen()
+        defer { endExternalArchiveOpen() }
         openArchiveURLs(archiveURLs, preferReusableWindow: false)
     }
 
@@ -162,13 +160,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         fileManagerWindowRegistry.openFileSystemItemInNewFileManager(url)
     }
 
-    func beginDeferredArchiveOpen() {
-        shouldPresentInitialFileManager = false
-        pendingDeferredArchiveOpens += 1
+    func beginExternalArchiveOpen() {
+        launchOpenCoordinator.beginExternalOpen()
     }
 
-    func endDeferredArchiveOpen() {
-        pendingDeferredArchiveOpens = max(0, pendingDeferredArchiveOpens - 1)
+    func endExternalArchiveOpen() {
+        launchOpenCoordinator.endExternalOpen()
     }
 
     private func openArchiveURLs(_ urls: [URL], preferReusableWindow: Bool) {

@@ -12,8 +12,8 @@ protocol FileManagerWindowCoordinating: FileManagerArchiveCoordinationProviding 
 
 @MainActor
 protocol FileManagerDocumentOpenRouting: AnyObject {
-    func beginDeferredArchiveOpen()
-    func endDeferredArchiveOpen()
+    func beginExternalArchiveOpen()
+    func endExternalArchiveOpen()
     func openArchiveInNewFileManager(_ url: URL)
 }
 

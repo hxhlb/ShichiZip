@@ -44,8 +44,8 @@ class ArchiveDocument: NSDocument {
     override func makeWindowControllers() {
         // Redirect document opens to the unified file-manager surface.
         let openRouter = NSApp.delegate as? (any FileManagerDocumentOpenRouting)
-        openRouter?.beginDeferredArchiveOpen()
-        defer { openRouter?.endDeferredArchiveOpen() }
+        openRouter?.beginExternalArchiveOpen()
+        defer { openRouter?.endExternalArchiveOpen() }
         guard let url = fileURL else { return }
         openRouter?.openArchiveInNewFileManager(url)
         close()
