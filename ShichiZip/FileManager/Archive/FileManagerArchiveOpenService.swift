@@ -113,9 +113,11 @@ enum FileManagerArchiveOpenService {
     {
         let archive = SZArchive()
         do {
-            try archive.open(atPath: url.path,
-                             openType: openMode.openType,
-                             session: session)
+            try coordinatedRead(at: url) { coordinatedURL in
+                try archive.open(atPath: coordinatedURL.path,
+                                 openType: openMode.openType,
+                                 session: session)
+            }
             let entries = try FileManagerArchiveListing.items(from: archive,
                                                               session: session)
             return .opened(FileManagerPreparedArchiveOpen(hostDirectory: hostDirectory,
@@ -135,5 +137,28 @@ enum FileManagerArchiveOpenService {
             }
             return .failed(error)
         }
+    }
+
+    /// Read the file through an `NSFileCoordinator` so cloud / file-provider
+    /// placeholders are materialized before 7-Zip's POSIX `open(2)` runs, and
+    /// hold a security-scoped access grant for the duration of the read so
+    /// sandboxed entry points (Launch Services hand-off, bookmarks) work.
+    private static func coordinatedRead(at url: URL,
+                                        accessor: (URL) throws -> Void) throws
+    {
+        let needsScopeRelease = url.startAccessingSecurityScopedResource()
+        defer { if needsScopeRelease { url.stopAccessingSecurityScopedResource() } }
+
+        var coordinatorError: NSError?
+        var accessorError: Error?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
+            do {
+                try accessor(coordinatedURL)
+            } catch {
+                accessorError = error
+            }
+        }
+        if let accessorError { throw accessorError }
+        if let coordinatorError { throw coordinatorError }
     }
 }
