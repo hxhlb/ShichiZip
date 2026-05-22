@@ -152,14 +152,17 @@ jobs:
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_P12_PASSWORD }}
           SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [[ -n "$CERTIFICATE_P12_BASE64" && -n "$CERTIFICATE_PASSWORD" && -n "$SIGNING_IDENTITY" ]]; then
             echo "has_certificate=true" >> "$GITHUB_OUTPUT"
             echo "code_sign_identity=$SIGNING_IDENTITY" >> "$GITHUB_OUTPUT"
+            echo "development_team=${APPLE_TEAM_ID:-}" >> "$GITHUB_OUTPUT"
             echo "Using imported signing certificate."
           else
             echo "has_certificate=false" >> "$GITHUB_OUTPUT"
             echo "code_sign_identity=-" >> "$GITHUB_OUTPUT"
+            echo "development_team=" >> "$GITHUB_OUTPUT"
             echo "Signing secrets are unavailable; using ad-hoc signing for validation."
           fi
 
@@ -201,6 +204,7 @@ jobs:
             -arch "${{ matrix.target_arch }}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="${{ steps.signing.outputs.code_sign_identity }}" \
+            DEVELOPMENT_TEAM="${{ steps.signing.outputs.development_team }}" \
             build
 
       - name: Verify app bundle signature
@@ -249,11 +253,16 @@ jobs:
             "-only-testing:${{ matrix.scheme }}Tests" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="${{ steps.signing.outputs.code_sign_identity }}" \
+            DEVELOPMENT_TEAM="${{ steps.signing.outputs.development_team }}" \
             test
 
       - name: Run UI tests
         run: |
           derived_data_path="build/DerivedData/${{ matrix.scheme }}"
+
+          # Persist info/debug os_log entries so they survive until log show
+          sudo log config --subsystem ee.dawn.ShichiZip --mode level:debug || true
+          sudo log config --subsystem ee.dawn.ShichiZipZS --mode level:debug || true
 
           xcodebuild \
             -project "$XCODE_PROJECT" \
@@ -264,10 +273,10 @@ jobs:
             "-only-testing:${{ matrix.scheme }}UITests" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="${{ steps.signing.outputs.code_sign_identity }}" \
+            DEVELOPMENT_TEAM="${{ steps.signing.outputs.development_team }}" \
             test
 
-      - name: Collect failed test diagnostics
-        if: failure()
+      - name: Collect all test diagnostics
         run: |
           diagnostics_dir="build/test-diagnostics/${{ matrix.scheme }}-${{ matrix.target_arch }}"
           test_logs_dir="build/DerivedData/${{ matrix.scheme }}/Logs/Test"
@@ -292,8 +301,16 @@ jobs:
             done
           done
 
-      - name: Upload failed test diagnostics
-        if: failure()
+          # Collect unified log entries from the app under test
+          log show --predicate 'subsystem BEGINSWITH "ee.dawn.ShichiZip"' \
+            --info --debug --last 30m --style compact \
+            > "$diagnostics_dir/app-unified-log.txt" 2>&1 || true
+
+          # Check for saved application state
+          ls -laR "$HOME/Library/Saved Application State"/ee.dawn.ShichiZip*.savedState/ \
+            > "$diagnostics_dir/saved-application-state.txt" 2>&1 || true
+
+      - name: Upload all test diagnostics
         uses: actions/upload-artifact@v7
         with:
           name: test-diagnostics-${{ matrix.artifact_prefix }}-${{ matrix.target_arch }}-${{ github.run_attempt }}
