@@ -388,6 +388,62 @@ final class FileManagerViewPreferencesTests: XCTestCase {
     }
 }
 
+final class FileManagerWindowPreferencesTests: XCTestCase {
+    func testRememberWindowFrameDefaultsOffAndRoundTrips() throws {
+        let defaults = try makeIsolatedDefaults()
+
+        XCTAssertFalse(FileManagerWindowPreferences.remembersWindowFrame(defaults: defaults))
+
+        FileManagerWindowPreferences.setRemembersWindowFrame(true, defaults: defaults)
+        XCTAssertTrue(FileManagerWindowPreferences.remembersWindowFrame(defaults: defaults))
+
+        FileManagerWindowPreferences.setRemembersWindowFrame(false, defaults: defaults)
+        XCTAssertFalse(FileManagerWindowPreferences.remembersWindowFrame(defaults: defaults))
+    }
+
+    func testSavedWindowFrameRoundTrips() throws {
+        let defaults = try makeIsolatedDefaults()
+        let frame = NSRect(x: 120, y: 240, width: 1120, height: 720)
+
+        FileManagerWindowPreferences.setSavedWindowFrame(frame, defaults: defaults)
+
+        XCTAssertEqual(FileManagerWindowPreferences.savedWindowFrame(defaults: defaults), frame)
+    }
+
+    func testSavedWindowFrameIgnoresInvalidFrames() throws {
+        let defaults = try makeIsolatedDefaults()
+
+        FileManagerWindowPreferences.setSavedWindowFrame(NSRect(x: 0, y: 0, width: 0, height: 720),
+                                                         defaults: defaults)
+        FileManagerWindowPreferences.setSavedWindowFrame(NSRect(x: 0, y: 0, width: 1120, height: CGFloat.infinity),
+                                                         defaults: defaults)
+
+        XCTAssertNil(FileManagerWindowPreferences.savedWindowFrame(defaults: defaults))
+    }
+
+    func testResetSavedWindowFrameKeepsRememberOption() throws {
+        let defaults = try makeIsolatedDefaults()
+
+        FileManagerWindowPreferences.setRemembersWindowFrame(true, defaults: defaults)
+        FileManagerWindowPreferences.setSavedWindowFrame(NSRect(x: 120, y: 240, width: 1120, height: 720),
+                                                         defaults: defaults)
+        FileManagerWindowPreferences.resetSavedWindowFrame(defaults: defaults)
+
+        XCTAssertNil(FileManagerWindowPreferences.savedWindowFrame(defaults: defaults))
+        XCTAssertTrue(FileManagerWindowPreferences.remembersWindowFrame(defaults: defaults))
+    }
+
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        let suiteName = "FileManagerWindowPreferencesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock {
+            UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
+        }
+        return defaults
+    }
+}
+
 final class FileManagerColumnTests: XCTestCase {
     func testFileSystemColumnsExposeUpstreamBackedProperties() {
         XCTAssertEqual(FileManagerColumn.fileSystemColumns.map(\.id), [

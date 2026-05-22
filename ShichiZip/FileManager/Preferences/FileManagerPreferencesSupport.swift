@@ -10,7 +10,10 @@ enum FileManagerPreferenceStore {
         .standard
     }
 
-    static func bool(forKey key: String, defaultValue: Bool) -> Bool {
+    static func bool(forKey key: String,
+                     defaultValue: Bool,
+                     defaults: UserDefaults = .standard) -> Bool
+    {
         guard defaults.object(forKey: key) != nil else {
             return defaultValue
         }
@@ -50,6 +53,113 @@ enum FileManagerPanePreferences {
 
     static func setShowsDualPane(_ value: Bool) {
         FileManagerPreferenceStore.set(value, forKey: dualPaneKey)
+    }
+}
+
+enum FileManagerWindowPreferences {
+    static let defaultContentRect = NSRect(x: 0, y: 0, width: 1000, height: 650)
+    static let minimumSize = NSSize(width: 600, height: 400)
+
+    private static let rememberWindowFrameKey = "FileManager.RememberWindowFrame"
+    private static let savedWindowFrameKey = "FileManager.WindowFrame"
+
+    static var remembersWindowFrame: Bool {
+        remembersWindowFrame()
+    }
+
+    static func remembersWindowFrame(defaults: UserDefaults = .standard) -> Bool {
+        FileManagerPreferenceStore.bool(forKey: rememberWindowFrameKey,
+                                        defaultValue: false,
+                                        defaults: defaults)
+    }
+
+    static func setRemembersWindowFrame(_ value: Bool,
+                                        defaults: UserDefaults = .standard)
+    {
+        defaults.set(value, forKey: rememberWindowFrameKey)
+    }
+
+    static func savedWindowFrame(defaults: UserDefaults = .standard) -> NSRect? {
+        guard let storedFrame = defaults.string(forKey: savedWindowFrameKey) else { return nil }
+        let frame = NSRectFromString(storedFrame)
+        guard isValidWindowFrame(frame) else { return nil }
+        return frame
+    }
+
+    static func setSavedWindowFrame(_ frame: NSRect,
+                                    defaults: UserDefaults = .standard)
+    {
+        guard isValidWindowFrame(frame) else { return }
+        defaults.set(NSStringFromRect(frame), forKey: savedWindowFrameKey)
+    }
+
+    static func resetSavedWindowFrame(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: savedWindowFrameKey)
+    }
+
+    @discardableResult
+    static func applySavedWindowFrameIfNeeded(to window: NSWindow,
+                                              defaults: UserDefaults = .standard) -> Bool
+    {
+        guard remembersWindowFrame(defaults: defaults),
+              let savedFrame = savedWindowFrame(defaults: defaults)
+        else {
+            return false
+        }
+
+        window.setFrame(constrainedWindowFrame(savedFrame, for: window), display: false)
+        return true
+    }
+
+    private static func isValidWindowFrame(_ frame: NSRect) -> Bool {
+        frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.width.isFinite
+            && frame.height.isFinite
+            && frame.width > 0
+            && frame.height > 0
+    }
+
+    private static func constrainedWindowFrame(_ frame: NSRect,
+                                               for window: NSWindow) -> NSRect
+    {
+        let minimumSize = window.minSize
+        var constrainedFrame = frame
+        constrainedFrame.size.width = max(constrainedFrame.width, minimumSize.width)
+        constrainedFrame.size.height = max(constrainedFrame.height, minimumSize.height)
+
+        guard let visibleFrame = screen(for: constrainedFrame)?.visibleFrame else {
+            return constrainedFrame
+        }
+
+        constrainedFrame.size.width = min(constrainedFrame.width,
+                                          max(visibleFrame.width, minimumSize.width))
+        constrainedFrame.size.height = min(constrainedFrame.height,
+                                           max(visibleFrame.height, minimumSize.height))
+
+        if constrainedFrame.maxX > visibleFrame.maxX {
+            constrainedFrame.origin.x = visibleFrame.maxX - constrainedFrame.width
+        }
+        if constrainedFrame.minX < visibleFrame.minX {
+            constrainedFrame.origin.x = visibleFrame.minX
+        }
+        if constrainedFrame.maxY > visibleFrame.maxY {
+            constrainedFrame.origin.y = visibleFrame.maxY - constrainedFrame.height
+        }
+        if constrainedFrame.minY < visibleFrame.minY {
+            constrainedFrame.origin.y = visibleFrame.minY
+        }
+
+        return constrainedFrame
+    }
+
+    private static func screen(for frame: NSRect) -> NSScreen? {
+        let frameCenter = NSPoint(x: frame.midX, y: frame.midY)
+        return NSScreen.screens.first { screen in
+            screen.frame.contains(frameCenter)
+        } ?? NSScreen.screens.first { screen in
+            screen.frame.intersects(frame)
+        } ?? NSScreen.main ?? NSScreen.screens.first
     }
 }
 

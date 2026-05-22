@@ -152,6 +152,7 @@
 "app.settings.commanderLike" = "Commander-like";
 "app.settings.commanderLikeDescription" = "Uses the classic 7-Zip function-key workflow for file operations and pane management.";
 "app.settings.compression" = "Compression";
+"app.settings.confirmActionFormat" = "Confirm \"%@\"?";
 "app.settings.currentDefault" = "Current Default";
 "app.settings.currentShortcuts" = "Current Shortcuts";
 "app.settings.custom" = "Custom";
@@ -163,7 +164,7 @@
 "app.settings.defaultOpenersNote" = "Already-default types are shown as Current Default. To switch a type back to another app later, use Finder's Open With controls or another app's integration settings.";
 "app.settings.excludeMacResourceForks" = "Exclude macOS resource fork files by default";
 "app.settings.extraction" = "Extraction";
-"app.settings.fileListLayout" = "File List Layout";
+"app.settings.layout" = "Layout";
 "app.settings.finderLike" = "Finder-like";
 "app.settings.finderLikeDescription" = "Uses macOS-style file manager shortcuts, including Return to rename and Command+Arrow navigation.";
 "app.settings.finderQuickActions" = "Finder Quick Actions";
@@ -182,11 +183,12 @@
 "app.settings.quickActionsOpenErrorDetail" = "Open System Settings and go to Extensions > Finder to manage %@'s Quick Actions.";
 "app.settings.quitOnLastClose" = "Quit the app when the last window closes";
 "app.settings.recordShortcut" = "Record Shortcut";
+"app.settings.rememberFileManagerWindowFrame" = "Remember File Manager window size and position";
 "app.settings.reset" = "Reset";
 "app.settings.resetFileListLayout" = "Reset File List Layouts";
 "app.settings.resetFileListLayoutConfirmDetail" = "Saved sort order, column order, and column widths will return to defaults.";
-"app.settings.resetFileListLayoutConfirmTitle" = "Reset file list layouts?";
 "app.settings.resetFileListLayoutNote" = "Clears saved sort order, column order, and column widths for File Manager lists.";
+"app.settings.resetFileManagerWindowFrame" = "Reset Saved Window Size and Position";
 "app.settings.scheme" = "Scheme:";
 "app.settings.setAllAsDefault" = "Set All as Default";
 "app.settings.shortcuts" = "Shortcuts";

@@ -123,12 +123,12 @@ final class FileManagerWindowRegistry: FileManagerWindowCoordinating {
               !window.isMiniaturized
         else { return }
 
-        window.cascadeTopLeft(from: firstFileManagerWindowTopLeftPoint(for: window,
-                                                                       excluding: controller))
+        window.cascadeTopLeft(from: cascadeTopLeftPoint(for: window,
+                                                        excluding: controller))
     }
 
-    private func firstFileManagerWindowTopLeftPoint(for window: NSWindow,
-                                                    excluding controller: FileManagerWindowController) -> NSPoint
+    private func cascadeTopLeftPoint(for window: NSWindow,
+                                     excluding controller: FileManagerWindowController) -> NSPoint
     {
         guard let sourceWindow = controllers
             .filter({ $0 !== controller })

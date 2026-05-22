@@ -29,14 +29,16 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
 
     init(windowCoordinator: any FileManagerWindowCoordinating) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 650),
+            contentRect: FileManagerWindowPreferences.defaultContentRect,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false,
         )
         window.title = AppBuildInfo.appDisplayName()
-        window.minSize = NSSize(width: 600, height: 400)
-        window.center()
+        window.minSize = FileManagerWindowPreferences.minimumSize
+        if !FileManagerWindowPreferences.applySavedWindowFrameIfNeeded(to: window) {
+            window.center()
+        }
         self.windowCoordinator = windowCoordinator
         super.init(window: window)
         window.delegate = self
@@ -91,6 +93,36 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         autoRefreshTimer = nil
         quickLookPanelController.closePreview()
         onWindowWillClose?(self)
+    }
+
+    func windowDidMove(_: Notification) {
+        saveWindowFrameIfNeeded()
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              !window.inLiveResize
+        else {
+            return
+        }
+        saveWindowFrameIfNeeded()
+    }
+
+    func windowDidEndLiveResize(_: Notification) {
+        saveWindowFrameIfNeeded()
+    }
+
+    private func saveWindowFrameIfNeeded() {
+        guard FileManagerWindowPreferences.remembersWindowFrame,
+              let window,
+              window.isVisible,
+              !window.isMiniaturized,
+              !window.styleMask.contains(.fullScreen)
+        else {
+            return
+        }
+
+        FileManagerWindowPreferences.setSavedWindowFrame(window.frame)
     }
 
     private func setupUI() {

@@ -548,11 +548,24 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
             stack.addArrangedSubview(cb)
         }
 
-        let fileListSeparator = makeSettingsSeparator()
-        stack.addArrangedSubview(fileListSeparator)
-        fileListSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        let windowSeparator = makeSettingsSeparator()
+        stack.addArrangedSubview(windowSeparator)
+        windowSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
-        stack.addArrangedSubview(makeSectionLabel(SZL10n.string("app.settings.fileListLayout")))
+        stack.addArrangedSubview(makeSectionLabel(SZL10n.string("app.settings.layout")))
+
+        let rememberWindowFrameCheckbox = NSButton(checkboxWithTitle: SZL10n.string("app.settings.rememberFileManagerWindowFrame"),
+                                                   target: self,
+                                                   action: #selector(rememberWindowFrameChanged(_:)))
+        rememberWindowFrameCheckbox.state = FileManagerWindowPreferences.remembersWindowFrame ? .on : .off
+        rememberWindowFrameCheckbox.setAccessibilityIdentifier("settings.rememberFileManagerWindowFrame")
+        stack.addArrangedSubview(rememberWindowFrameCheckbox)
+
+        let resetWindowFrameButton = NSButton(title: SZL10n.string("app.settings.resetFileManagerWindowFrame"),
+                                              target: self,
+                                              action: #selector(resetFileManagerWindowFrame(_:)))
+        resetWindowFrameButton.setAccessibilityIdentifier("settings.resetFileManagerWindowFrame")
+        stack.addArrangedSubview(resetWindowFrameButton)
 
         let resetFileListPreferencesButton = NSButton(title: SZL10n.string("app.settings.resetFileListLayout"),
                                                       target: self,
@@ -1202,15 +1215,34 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
     }
 
     @objc private func resetFileListPreferences(_: NSButton) {
+        guard confirmSettingsAction(SZL10n.string("app.settings.resetFileListLayout"),
+                                    informativeText: SZL10n.string("app.settings.resetFileListLayoutConfirmDetail"))
+        else { return }
+
+        FileManagerViewPreferences.removeAllListViewInfos()
+    }
+
+    @objc private func rememberWindowFrameChanged(_ sender: NSButton) {
+        FileManagerWindowPreferences.setRemembersWindowFrame(sender.state == .on)
+    }
+
+    @objc private func resetFileManagerWindowFrame(_: NSButton) {
+        guard confirmSettingsAction(SZL10n.string("app.settings.resetFileManagerWindowFrame")) else { return }
+        FileManagerWindowPreferences.resetSavedWindowFrame()
+    }
+
+    private func confirmSettingsAction(_ actionTitle: String,
+                                       informativeText: String? = nil) -> Bool
+    {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = SZL10n.string("app.settings.resetFileListLayoutConfirmTitle")
-        alert.informativeText = SZL10n.string("app.settings.resetFileListLayoutConfirmDetail")
+        alert.messageText = SZL10n.string("app.settings.confirmActionFormat", actionTitle)
+        if let informativeText {
+            alert.informativeText = informativeText
+        }
         alert.addButton(withTitle: SZL10n.string("app.settings.reset"))
         alert.addButton(withTitle: SZL10n.string("common.cancel"))
-
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        FileManagerViewPreferences.removeAllListViewInfos()
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     @objc private func workDirModeChanged(_ sender: NSButton) {
