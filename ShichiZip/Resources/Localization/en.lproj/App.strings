@@ -164,12 +164,12 @@
 "app.settings.defaultOpenersNote" = "Already-default types are shown as Current Default. To switch a type back to another app later, use Finder's Open With controls or another app's integration settings.";
 "app.settings.excludeMacResourceForks" = "Exclude macOS resource fork files by default";
 "app.settings.extraction" = "Extraction";
-"app.settings.layout" = "Layout";
 "app.settings.finderLike" = "Finder-like";
 "app.settings.finderLikeDescription" = "Uses macOS-style file manager shortcuts, including Return to rename and Command+Arrow navigation.";
 "app.settings.finderQuickActions" = "Finder Quick Actions";
 "app.settings.followSystem" = "Follow System";
 "app.settings.integration" = "Integration";
+"app.settings.layout" = "Layout";
 "app.settings.limitTo" = "Limit to";
 "app.settings.makeDefault" = "Make Default";
 "app.settings.maxRAMForExtraction" = "Maximum RAM for extraction:";

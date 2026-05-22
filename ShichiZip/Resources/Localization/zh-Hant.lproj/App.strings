@@ -164,12 +164,12 @@
 "app.settings.defaultOpenersNote" = "已是預設的類型會顯示為目前預設。若稍後要將某種類型切回其他 App，請使用 Finder 的「打開檔案的應用程式」控制項，或其他 App 的整合設定。";
 "app.settings.excludeMacResourceForks" = "預設排除 macOS 資源分支檔案";
 "app.settings.extraction" = "解壓縮";
-"app.settings.layout" = "版面配置";
 "app.settings.finderLike" = "Finder 風格";
 "app.settings.finderLikeDescription" = "使用 macOS 風格的檔案管理器快速鍵，包含使用 Return 重新命名與 Command + 方向鍵導覽。";
 "app.settings.finderQuickActions" = "Finder 快速動作";
 "app.settings.followSystem" = "跟隨系統";
 "app.settings.integration" = "整合";
+"app.settings.layout" = "版面配置";
 "app.settings.limitTo" = "限制為";
 "app.settings.makeDefault" = "設為預設";
 "app.settings.maxRAMForExtraction" = "最大解壓縮記憶體：";
