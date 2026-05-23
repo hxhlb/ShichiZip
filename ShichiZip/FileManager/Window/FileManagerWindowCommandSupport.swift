@@ -123,6 +123,26 @@ enum FileManagerArchiveCommandSupport {
         }
     }
 
+    static func extractArchiveSmart(from activePane: FileManagerPaneController,
+                                    parentWindow: NSWindow?,
+                                    refreshPaneDisplayingDirectory: @escaping @MainActor (URL) -> Void)
+    {
+        let snapshot = activePane.snapshot
+        guard !snapshot.isVirtualLocation,
+              let archiveURL = snapshot.selectedArchiveCandidateURL
+        else { return }
+
+        SmartExtractRunner.extract(archiveURL: archiveURL,
+                                   defaults: ExtractDialogController.quickActionDefaults(),
+                                   parentWindow: parentWindow,
+                                   shouldRevealDestination: { false })
+        { destinationURL in
+            if let destinationURL {
+                refreshPaneDisplayingDirectory(destinationURL.deletingLastPathComponent())
+            }
+        }
+    }
+
     private static func copyArchiveItemsFromOpenArchive(from activePane: FileManagerPaneController,
                                                         snapshot: FileManagerPaneSnapshot,
                                                         inactivePaneSnapshot: FileManagerPaneSnapshot?,
@@ -629,6 +649,8 @@ enum FileManagerCommandValidator {
             return capabilities.canAddSelectedItemsToArchive
         case #selector(FileManagerWindowController.extractArchive(_:)):
             return capabilities.canExtractSelectionOrArchive
+        case #selector(FileManagerWindowController.extractSmart(_:)):
+            return !activePane.isVirtualLocation && activePane.selectedArchiveCandidateURL != nil
         case #selector(FileManagerWindowController.extractHere(_:)):
             return capabilities.canExtractSelectionOrArchive
         case #selector(FileManagerWindowController.testArchive(_:)):

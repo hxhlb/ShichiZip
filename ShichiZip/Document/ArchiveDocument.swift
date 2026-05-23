@@ -42,12 +42,17 @@ class ArchiveDocument: NSDocument {
     }
 
     override func makeWindowControllers() {
-        // Redirect document opens to the unified file-manager surface.
+        // Redirect document opens to the unified file-manager surface, gated
+        // by the launch-open HUD so the user has a chance to cancel.
         let openRouter = NSApp.delegate as? (any FileManagerDocumentOpenRouting)
-        openRouter?.beginExternalArchiveOpen()
-        defer { openRouter?.endExternalArchiveOpen() }
-        guard let url = fileURL else { return }
-        openRouter?.openArchiveInNewFileManager(url)
+        guard let url = fileURL else {
+            close()
+            return
+        }
+        LaunchOpenHUDController.present(urls: [url],
+                                        holdAlive: { openRouter?.beginExternalArchiveOpen() },
+                                        release: { openRouter?.endExternalArchiveOpen() },
+                                        proceed: { openRouter?.openArchiveInNewFileManager(url) })
         close()
     }
 

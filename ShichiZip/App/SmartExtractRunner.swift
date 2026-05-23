@@ -1,6 +1,7 @@
 import Cocoa
 
-enum SmartQuickExtractQuickActionRunner {
+/// Shared smart extraction used by Quick Actions, menus, and launch-open HUD.
+enum SmartExtractRunner {
     private static let uniqueDestinationFailureDescription = "A unique extraction destination could not be created."
 
     private struct Plan {
@@ -18,7 +19,8 @@ enum SmartQuickExtractQuickActionRunner {
     static func extract(archiveURL: URL,
                         defaults: ExtractQuickActionDefaults,
                         parentWindow: NSWindow?,
-                        shouldRevealDestination: @escaping @MainActor () -> Bool)
+                        shouldRevealDestination: @escaping @MainActor () -> Bool,
+                        completion: (@MainActor (URL?) -> Void)? = nil)
     {
         Task { @MainActor in
             do {
@@ -53,10 +55,13 @@ enum SmartQuickExtractQuickActionRunner {
                                       archiveURL: archiveURL)
                 }
 
+                completion?(plan.destinationURL)
+
                 if let postProcessError {
                     szPresentError(postProcessError, for: parentWindow)
                 }
             } catch {
+                completion?(nil)
                 szPresentError(error, for: parentWindow)
             }
         }

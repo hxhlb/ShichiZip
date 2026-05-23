@@ -377,6 +377,12 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
                                                         showError: showErrorAlert)
     }
 
+    @objc func extractSmart(_: Any?) {
+        FileManagerArchiveCommandSupport.extractArchiveSmart(from: activePane,
+                                                             parentWindow: window,
+                                                             refreshPaneDisplayingDirectory: refreshPaneDisplayingDirectory)
+    }
+
     @objc func testArchive(_: Any?) {
         FileManagerArchiveCommandSupport.testArchive(from: activePane,
                                                      parentWindow: window,

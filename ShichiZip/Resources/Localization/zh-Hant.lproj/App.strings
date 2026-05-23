@@ -116,6 +116,7 @@
 "app.fileManager.selectArchiveToExtract" = "請選取要解壓縮的壓縮檔。";
 "app.fileManager.selectArchiveToTest" = "請選取要測試的壓縮檔。";
 "app.fileManager.selectFilesToAdd" = "請選取要加入壓縮檔的檔案或資料夾。";
+"app.fileManager.smartExtract" = "快速解壓縮";
 "app.fileManager.statusFile" = "個檔案";
 "app.fileManager.statusFiles" = "個檔案";
 "app.fileManager.statusFolder" = "個資料夾";
@@ -124,6 +125,12 @@
 "app.fileManager.statusTotal" = "總計";
 "app.fileManager.suspendedDescription" = "窗格已關閉。按一下下方按鈕，或在位址列輸入路徑以重新開啟。";
 "app.fileManager.testOK" = "測試正常";
+
+"app.launchOpen.action.browse" = "瀏覽";
+"app.launchOpen.action.extractNow" = "立即解壓縮";
+"app.launchOpen.countdown" = "將在 %d 秒後自動解壓縮。";
+"app.launchOpen.title.many" = "正在開啟 %d 個壓縮檔";
+"app.launchOpen.title.one" = "正在開啟 %@";
 
 "app.menu.about" = "關於 %@";
 "app.menu.bringAllToFront" = "將所有視窗移至最前";
@@ -169,6 +176,14 @@
 "app.settings.finderQuickActions" = "Finder 快速動作";
 "app.settings.followSystem" = "跟隨系統";
 "app.settings.integration" = "整合";
+"app.settings.launchOpen" = "開啟壓縮檔時";
+"app.settings.launchOpen.cancelWindow" = "取消等待時間：";
+"app.settings.launchOpen.cancelWindow.secondsSuffix" = "秒";
+"app.settings.launchOpen.extractImmediately" = "立即解壓縮（自動解壓縮）";
+"app.settings.launchOpen.modifier.none" = "無";
+"app.settings.launchOpen.modifierToInvert" = "改為瀏覽的輔助鍵：";
+"app.settings.launchOpen.revealAfterExtract" = "完成後在 Finder 中顯示解壓縮項目";
+"app.settings.launchOpen.showContents" = "顯示內容";
 "app.settings.layout" = "版面配置";
 "app.settings.limitTo" = "限制為";
 "app.settings.makeDefault" = "設為預設";

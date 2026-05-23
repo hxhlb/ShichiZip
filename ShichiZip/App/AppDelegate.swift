@@ -5,6 +5,7 @@ import os
 class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouting {
     #if DEBUG
         private static let disableSmartQuickExtractRevealEnvironmentKey = "SHICHIZIP_DISABLE_SMART_QUICK_EXTRACT_REVEAL"
+        private static let launchOpenUITestArchivePathsEnvironmentKey = "SHICHIZIP_UI_TEST_LAUNCH_OPEN_ARCHIVES"
     #endif
 
     private static var shouldRevealSmartQuickExtractDestination: Bool {
@@ -52,6 +53,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         if !isDefaultLaunch {
             launchOpenCoordinator.noteLaunchExpectsExternalOpen()
         }
+        #if DEBUG
+            if presentLaunchOpenUITestArchivesIfRequested() {
+                return
+            }
+        #endif
         // Only show file manager if no documents are being opened
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -93,10 +99,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     /// Handle files dropped onto dock icon
     func application(_: NSApplication, openFiles filenames: [String]) {
-        beginExternalArchiveOpen()
-        defer { endExternalArchiveOpen() }
         let urls = filenames.map { URL(fileURLWithPath: $0) }
-        openArchiveURLs(urls, preferReusableWindow: false)
+        presentLaunchOpenHUD(for: urls)
     }
 
     func application(_: NSApplication, open urls: [URL]) {
@@ -114,10 +118,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
         guard !archiveURLs.isEmpty else { return }
 
-        beginExternalArchiveOpen()
-        defer { endExternalArchiveOpen() }
-        openArchiveURLs(archiveURLs, preferReusableWindow: false)
+        presentLaunchOpenHUD(for: archiveURLs)
     }
+
+    private func presentLaunchOpenHUD(for urls: [URL]) {
+        LaunchOpenHUDController.present(urls: urls,
+                                        holdAlive: { [weak self] in
+                                            self?.beginExternalArchiveOpen()
+                                        },
+                                        release: { [weak self] in
+                                            self?.endExternalArchiveOpen()
+                                        },
+                                        proceed: { [weak self] in
+                                            self?.openArchiveURLs(urls, preferReusableWindow: false)
+                                        })
+    }
+
+    #if DEBUG
+        private func presentLaunchOpenUITestArchivesIfRequested() -> Bool {
+            guard let rawPaths = getenv(Self.launchOpenUITestArchivePathsEnvironmentKey) else {
+                return false
+            }
+
+            let urls = String(cString: rawPaths)
+                .split(separator: "\n")
+                .map { URL(fileURLWithPath: String($0)) }
+            guard !urls.isEmpty else { return false }
+
+            launchOpenCoordinator.suppressInitialFileManager()
+            presentLaunchOpenHUD(for: urls)
+            return true
+        }
+    #endif
 
     func applicationSupportsSecureRestorableState(_: NSApplication) -> Bool {
         true

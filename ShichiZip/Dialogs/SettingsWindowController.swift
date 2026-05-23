@@ -640,6 +640,8 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
 
         stack.addArrangedSubview(memRow)
 
+        addLaunchOpenSection(to: stack)
+
         return makePageView(containing: stack)
     }
 
@@ -1134,6 +1136,179 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
         return makePageView(containing: stack)
     }
 
+    // MARK: - When opening an archive
+
+    private static let launchOpenDelayChoices: [TimeInterval] = [0.0, 1.0, 2.0, 5.0, 10.0]
+    private static let launchOpenIndent: CGFloat = 22
+
+    /// Controls enabled only when "Extract immediately" is selected.
+    private var launchOpenExtractControls: [NSControl] = []
+    private var launchOpenExtractLabels: [NSTextField] = []
+    private var launchOpenDelaySlider: NSSlider?
+    private var launchOpenDelayField: NSTextField?
+
+    private func addLaunchOpenSection(to stack: NSStackView) {
+        launchOpenExtractControls.removeAll()
+        launchOpenExtractLabels.removeAll()
+        launchOpenDelaySlider = nil
+        launchOpenDelayField = nil
+
+        let separator = makeSettingsSeparator()
+        stack.addArrangedSubview(separator)
+        separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        stack.addArrangedSubview(makeSectionLabel(SZL10n.string("app.settings.launchOpen")))
+
+        let current = SZSettings.launchOpenDefaultAction
+
+        let browseRadio = NSButton(radioButtonWithTitle: SZL10n.string("app.settings.launchOpen.showContents"),
+                                   target: self,
+                                   action: #selector(launchOpenActionChanged(_:)))
+        browseRadio.identifier = NSUserInterfaceItemIdentifier(LaunchOpenAction.browse.rawValue)
+        browseRadio.state = current == .browse ? .on : .off
+        browseRadio.setAccessibilityIdentifier("settings.launchOpen.browse")
+        stack.addArrangedSubview(browseRadio)
+
+        let extractRadio = NSButton(radioButtonWithTitle: SZL10n.string("app.settings.launchOpen.extractImmediately"),
+                                    target: self,
+                                    action: #selector(launchOpenActionChanged(_:)))
+        extractRadio.identifier = NSUserInterfaceItemIdentifier(LaunchOpenAction.extract.rawValue)
+        extractRadio.state = current == .extract ? .on : .off
+        extractRadio.setAccessibilityIdentifier("settings.launchOpen.extract")
+        stack.addArrangedSubview(extractRadio)
+
+        let revealCheck = NSButton(checkboxWithTitle: SZL10n.string("app.settings.launchOpen.revealAfterExtract"),
+                                   target: self,
+                                   action: #selector(launchOpenRevealChanged(_:)))
+        revealCheck.state = SZSettings.launchOpenRevealAfterExtract ? .on : .off
+        revealCheck.setAccessibilityIdentifier("settings.launchOpen.reveal")
+        stack.addArrangedSubview(indentedRow(revealCheck))
+        launchOpenExtractControls.append(revealCheck)
+
+        // Continuous slider with common tick marks; field accepts exact values.
+        let cancelLabel = NSTextField(labelWithString: SZL10n.string("app.settings.launchOpen.cancelWindow"))
+        let currentDelay = SZSettings.launchOpenDelaySeconds
+
+        let delaySlider = NSSlider(value: launchOpenSliderPosition(forSeconds: currentDelay),
+                                   minValue: 0,
+                                   maxValue: Double(Self.launchOpenDelayChoices.count - 1),
+                                   target: self,
+                                   action: #selector(launchOpenDelaySliderChanged(_:)))
+        delaySlider.allowsTickMarkValuesOnly = false
+        delaySlider.numberOfTickMarks = Self.launchOpenDelayChoices.count
+        delaySlider.tickMarkPosition = .below
+        delaySlider.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        delaySlider.setAccessibilityIdentifier("settings.launchOpen.cancelWindow")
+        launchOpenDelaySlider = delaySlider
+
+        let delayField = NSTextField()
+        delayField.alignment = .right
+        delayField.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        delayField.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        delayField.target = self
+        delayField.action = #selector(launchOpenDelayFieldChanged(_:))
+        delayField.formatter = Self.launchOpenDelayFormatter
+        delayField.doubleValue = currentDelay
+        delayField.setAccessibilityIdentifier("settings.launchOpen.cancelWindow.field")
+        launchOpenDelayField = delayField
+
+        let secondsSuffix = NSTextField(labelWithString: SZL10n.string("app.settings.launchOpen.cancelWindow.secondsSuffix"))
+        secondsSuffix.textColor = .secondaryLabelColor
+
+        let delayRow = NSStackView(views: [cancelLabel, delaySlider, delayField, secondsSuffix])
+        delayRow.orientation = .horizontal
+        delayRow.alignment = .centerY
+        delayRow.spacing = 8
+        stack.addArrangedSubview(indentedRow(delayRow))
+        launchOpenExtractLabels.append(cancelLabel)
+        launchOpenExtractLabels.append(secondsSuffix)
+        launchOpenExtractControls.append(delaySlider)
+        launchOpenExtractControls.append(delayField)
+
+        let modifierLabel = NSTextField(labelWithString: SZL10n.string("app.settings.launchOpen.modifierToInvert"))
+        let modifierPopup = NSPopUpButton()
+        let currentModifier = SZSettings.launchOpenBrowseModifier
+        let modifierChoices: [(LaunchOpenBrowseModifier, String)] = [
+            (.none, SZL10n.string("app.settings.launchOpen.modifier.none")),
+            (.option, "⌥ Option"),
+            (.control, "⌃ Control"),
+            (.shift, "⇧ Shift"),
+        ]
+        for (index, choice) in modifierChoices.enumerated() {
+            modifierPopup.addItem(withTitle: choice.1)
+            modifierPopup.lastItem?.representedObject = choice.0.rawValue as NSString
+            if choice.0 == currentModifier {
+                modifierPopup.selectItem(at: index)
+            }
+        }
+        modifierPopup.target = self
+        modifierPopup.action = #selector(launchOpenModifierChanged(_:))
+        modifierPopup.setAccessibilityIdentifier("settings.launchOpen.modifier")
+
+        let modifierRow = NSStackView(views: [modifierLabel, modifierPopup])
+        modifierRow.orientation = .horizontal
+        modifierRow.alignment = .centerY
+        modifierRow.spacing = 8
+        stack.addArrangedSubview(indentedRow(modifierRow))
+        launchOpenExtractLabels.append(modifierLabel)
+        launchOpenExtractControls.append(modifierPopup)
+
+        updateLaunchOpenExtractControlsEnabled()
+    }
+
+    private func indentedRow(_ view: NSView) -> NSView {
+        let container = NSStackView(views: [view])
+        container.orientation = .horizontal
+        container.edgeInsets = NSEdgeInsets(top: 0, left: Self.launchOpenIndent, bottom: 0, right: 0)
+        return container
+    }
+
+    private static let launchOpenDelayFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.minimumFractionDigits = 1
+        f.maximumFractionDigits = 1
+        f.minimum = 0
+        f.allowsFloats = true
+        return f
+    }()
+
+    /// Map seconds to the slider's nonuniform tick scale.
+    private func launchOpenSliderPosition(forSeconds seconds: TimeInterval) -> Double {
+        let choices = Self.launchOpenDelayChoices
+        if seconds <= choices.first ?? 0 { return 0 }
+        if seconds >= choices.last ?? 0 { return Double(choices.count - 1) }
+        for i in 0 ..< (choices.count - 1) {
+            let lo = choices[i], hi = choices[i + 1]
+            if seconds >= lo, seconds <= hi {
+                let span = hi - lo
+                let frac = span > 0 ? (seconds - lo) / span : 0
+                return Double(i) + frac
+            }
+        }
+        return Double(choices.count - 1)
+    }
+
+    /// Map slider position back to seconds, rounded to 0.1s.
+    private func launchOpenSeconds(forSliderPosition position: Double) -> TimeInterval {
+        let choices = Self.launchOpenDelayChoices
+        let clamped = max(0, min(Double(choices.count - 1), position))
+        let lo = Int(clamped.rounded(.down))
+        let hi = min(lo + 1, choices.count - 1)
+        let frac = clamped - Double(lo)
+        let value = choices[lo] + (choices[hi] - choices[lo]) * frac
+        return (value * 10).rounded() / 10
+    }
+
+    private func updateLaunchOpenExtractControlsEnabled() {
+        let enabled = SZSettings.launchOpenDefaultAction == .extract
+        for control in launchOpenExtractControls {
+            control.isEnabled = enabled
+        }
+        for label in launchOpenExtractLabels {
+            label.textColor = enabled ? .labelColor : .disabledControlTextColor
+        }
+    }
+
     // MARK: - Actions
 
     @objc private func settingsCheckboxChanged(_ sender: NSButton) {
@@ -1179,6 +1354,38 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
 
     @objc private func memLimitChanged(_ sender: NSTextField) {
         SZSettings.set(max(1, sender.integerValue), for: .memLimitGB)
+    }
+
+    @objc private func launchOpenActionChanged(_ sender: NSButton) {
+        guard let rawValue = sender.identifier?.rawValue,
+              let action = LaunchOpenAction(rawValue: rawValue)
+        else { return }
+        SZSettings.launchOpenDefaultAction = action
+        updateLaunchOpenExtractControlsEnabled()
+    }
+
+    @objc private func launchOpenRevealChanged(_ sender: NSButton) {
+        SZSettings.launchOpenRevealAfterExtract = sender.state == .on
+    }
+
+    @objc private func launchOpenDelaySliderChanged(_ sender: NSSlider) {
+        let seconds = launchOpenSeconds(forSliderPosition: sender.doubleValue)
+        SZSettings.launchOpenDelaySeconds = seconds
+        launchOpenDelayField?.doubleValue = seconds
+    }
+
+    @objc private func launchOpenDelayFieldChanged(_ sender: NSTextField) {
+        let seconds = max(0, sender.doubleValue)
+        SZSettings.launchOpenDelaySeconds = seconds
+        launchOpenDelaySlider?.doubleValue = launchOpenSliderPosition(forSeconds: seconds)
+        sender.doubleValue = seconds
+    }
+
+    @objc private func launchOpenModifierChanged(_ sender: NSPopUpButton) {
+        guard let rawValue = sender.selectedItem?.representedObject as? String,
+              let modifier = LaunchOpenBrowseModifier(rawValue: rawValue)
+        else { return }
+        SZSettings.launchOpenBrowseModifier = modifier
     }
 
     @objc private func shortcutPresetChanged(_ sender: NSPopUpButton) {

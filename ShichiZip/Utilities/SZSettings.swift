@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 extension Notification.Name {
@@ -32,6 +33,44 @@ enum SZSettingsKey: String {
 
     /// Language
     case languageOverride = "LanguageOverride" // "" or locale code (e.g. "ja", "zh-Hans")
+
+    // Launch-open behavior
+    case launchOpenDefaultAction = "LaunchOpenDefaultAction" // LaunchOpenAction raw value
+    case launchOpenRevealAfterExtract = "LaunchOpenRevealAfterExtract"
+    case launchOpenDelaySeconds = "SZLaunchOpenDelaySeconds"
+    case launchOpenBrowseModifier = "LaunchOpenBrowseModifier" // LaunchOpenBrowseModifier raw value
+}
+
+/// Action taken when an archive is opened from outside the app.
+enum LaunchOpenAction: String {
+    case browse
+    case extract
+}
+
+/// Modifier that bypasses auto-extract and opens the archive contents instead.
+enum LaunchOpenBrowseModifier: String {
+    case none
+    case option
+    case control
+    case shift
+
+    var flag: NSEvent.ModifierFlags? {
+        switch self {
+        case .none: nil
+        case .option: .option
+        case .control: .control
+        case .shift: .shift
+        }
+    }
+
+    var glyph: String? {
+        switch self {
+        case .none: nil
+        case .option: "⌥"
+        case .control: "⌃"
+        case .shift: "⇧"
+        }
+    }
 }
 
 // MARK: - Settings Access
@@ -89,6 +128,42 @@ enum SZSettings {
     static var memLimitGB: Int {
         let v = defaults.integer(forKey: SZSettingsKey.memLimitGB.rawValue)
         return v > 0 ? v : 4
+    }
+
+    // MARK: - Launch-open HUD
+
+    static var launchOpenDefaultAction: LaunchOpenAction {
+        get { LaunchOpenAction(rawValue: string(.launchOpenDefaultAction)) ?? .browse }
+        set { set(newValue.rawValue, for: .launchOpenDefaultAction) }
+    }
+
+    static var launchOpenRevealAfterExtract: Bool {
+        get {
+            guard defaults.object(forKey: SZSettingsKey.launchOpenRevealAfterExtract.rawValue) != nil else {
+                return true
+            }
+            return defaults.bool(forKey: SZSettingsKey.launchOpenRevealAfterExtract.rawValue)
+        }
+        set { set(newValue, for: .launchOpenRevealAfterExtract) }
+    }
+
+    /// Cancel-window length, in seconds. `<= 0` bypasses the HUD entirely.
+    static var launchOpenDelaySeconds: TimeInterval {
+        get {
+            guard defaults.object(forKey: SZSettingsKey.launchOpenDelaySeconds.rawValue) != nil else {
+                return 2.0
+            }
+            return max(0, defaults.double(forKey: SZSettingsKey.launchOpenDelaySeconds.rawValue))
+        }
+        set {
+            defaults.set(max(0, newValue), forKey: SZSettingsKey.launchOpenDelaySeconds.rawValue)
+            postChange(for: .launchOpenDelaySeconds)
+        }
+    }
+
+    static var launchOpenBrowseModifier: LaunchOpenBrowseModifier {
+        get { LaunchOpenBrowseModifier(rawValue: string(.launchOpenBrowseModifier)) ?? .control }
+        set { set(newValue.rawValue, for: .launchOpenBrowseModifier) }
     }
 
     static var fileManagerShortcutPreset: FileManagerShortcutPreset {

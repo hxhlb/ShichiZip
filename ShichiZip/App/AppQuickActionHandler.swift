@@ -65,10 +65,10 @@ final class AppQuickActionHandler {
         let archiveURL = try existingSingleFileURL(from: request,
                                                    selectionError: SZL10n.string("app.fileManager.selectArchiveToExtract"),
                                                    directoryError: "Folders cannot be extracted as archives.")
-        SmartQuickExtractQuickActionRunner.extract(archiveURL: archiveURL,
-                                                   defaults: ExtractDialogController.quickActionDefaults(),
-                                                   parentWindow: NSApp.keyWindow ?? NSApp.mainWindow,
-                                                   shouldRevealDestination: shouldRevealSmartQuickExtractDestination)
+        SmartExtractRunner.extract(archiveURL: archiveURL,
+                                   defaults: ExtractDialogController.quickActionDefaults(),
+                                   parentWindow: NSApp.keyWindow ?? NSApp.mainWindow,
+                                   shouldRevealDestination: shouldRevealSmartQuickExtractDestination)
     }
 
     private func existingFileURLs(from request: ShichiZipQuickActionRequest) throws -> [URL] {

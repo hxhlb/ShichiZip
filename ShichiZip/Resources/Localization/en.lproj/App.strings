@@ -116,6 +116,7 @@
 "app.fileManager.selectArchiveToExtract" = "Select an archive to extract.";
 "app.fileManager.selectArchiveToTest" = "Select an archive to test.";
 "app.fileManager.selectFilesToAdd" = "Select files or folders to add to the archive.";
+"app.fileManager.smartExtract" = "Smart Extract";
 "app.fileManager.statusFile" = "file";
 "app.fileManager.statusFiles" = "files";
 "app.fileManager.statusFolder" = "folder";
@@ -124,6 +125,12 @@
 "app.fileManager.statusTotal" = "total";
 "app.fileManager.suspendedDescription" = "This pane has been closed. Click the button below or type a path in the address bar to reopen it.";
 "app.fileManager.testOK" = "Test OK";
+
+"app.launchOpen.action.browse" = "Browse";
+"app.launchOpen.action.extractNow" = "Extract Now";
+"app.launchOpen.countdown" = "Auto-extracts in %ds.";
+"app.launchOpen.title.many" = "Opening %d archives";
+"app.launchOpen.title.one" = "Opening %@";
 
 "app.menu.about" = "About %@";
 "app.menu.bringAllToFront" = "Bring All to Front";
@@ -169,6 +176,14 @@
 "app.settings.finderQuickActions" = "Finder Quick Actions";
 "app.settings.followSystem" = "Follow System";
 "app.settings.integration" = "Integration";
+"app.settings.launchOpen" = "When opening an archive";
+"app.settings.launchOpen.cancelWindow" = "Cancel window:";
+"app.settings.launchOpen.cancelWindow.secondsSuffix" = "s";
+"app.settings.launchOpen.extractImmediately" = "Extract immediately (Auto-extract)";
+"app.settings.launchOpen.modifier.none" = "None";
+"app.settings.launchOpen.modifierToInvert" = "Modifier to browse instead:";
+"app.settings.launchOpen.revealAfterExtract" = "Reveal extracted items in Finder when done";
+"app.settings.launchOpen.showContents" = "Show contents";
 "app.settings.layout" = "Layout";
 "app.settings.limitTo" = "Limit to";
 "app.settings.makeDefault" = "Make Default";
