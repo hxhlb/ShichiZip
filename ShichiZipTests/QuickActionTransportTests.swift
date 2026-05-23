@@ -26,6 +26,17 @@ final class QuickActionTransportTests: XCTestCase {
         super.tearDown()
     }
 
+    @MainActor
+    func testDeliveredQuickActionLaunchDoesNotKeepProcessAliveWhenLaunchNotificationArrivesLater() {
+        let coordinator = LaunchOpenCoordinator()
+
+        coordinator.noteLaunchOpenDelivered()
+        coordinator.noteLaunchExpectsExternalOpen()
+
+        XCTAssertTrue(coordinator.shouldSuppressInitialFileManager)
+        XCTAssertFalse(coordinator.shouldKeepProcessAlive)
+    }
+
     func testSmartQuickExtractLaunchURLRoundTripsRequest() throws {
         let archiveURL = URL(fileURLWithPath: "/tmp/../tmp/archive.7z")
         let request = ShichiZipQuickActionRequest(action: .smartQuickExtract,

@@ -97,8 +97,9 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             deselectRows: { [weak self] in
                 self?.tableView.deselectAll(nil)
             },
-            scrollRowToVisible: { [weak self] row in
-                self?.tableView.scrollRowToVisible(row)
+            scrollRow: { [weak self] row, placement in
+                self?.scrollFileListRow(row,
+                                        placement: placement)
             },
             showError: { [weak self] error in
                 self?.showErrorAlert(error)
@@ -973,7 +974,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         }
 
         let selectionState = FileManagerFileSystemSelectionState(selectedPaths: target.selectedPaths,
-                                                                 focusedPath: target.focusedPath)
+                                                                 focusedPath: target.focusedPath,
+                                                                 scrollPlacement: .centered)
         navigateToDirectory(target.parentDirectory,
                             showError: true,
                             selectionState: selectionState,
@@ -1526,8 +1528,47 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         guard !rows.isEmpty else { return }
         tableView.selectRowIndexes(rows, byExtendingSelection: false)
         if let firstRow = rows.first {
-            tableView.scrollRowToVisible(firstRow)
+            scrollFileListRow(firstRow, placement: .visible)
         }
+    }
+
+    private func scrollFileListRow(_ row: Int,
+                                   placement: FileManagerFileSystemSelectionScrollPlacement)
+    {
+        switch placement {
+        case .visible:
+            tableView.scrollRowToVisible(row)
+        case .centered:
+            scrollFileListRowToCenter(row)
+        }
+    }
+
+    private func scrollFileListRowToCenter(_ row: Int) {
+        guard row >= 0,
+              row < tableView.numberOfRows,
+              let clipView = tableView.enclosingScrollView?.contentView
+        else {
+            tableView.scrollRowToVisible(row)
+            return
+        }
+
+        tableView.layoutSubtreeIfNeeded()
+        let rowRect = tableView.rect(ofRow: row)
+        let visibleHeight = clipView.bounds.height
+        let documentHeight = tableView.bounds.height
+        guard visibleHeight > 0,
+              documentHeight > visibleHeight
+        else {
+            tableView.scrollRowToVisible(row)
+            return
+        }
+
+        let maximumY = max(0, documentHeight - visibleHeight)
+        let centeredY = rowRect.midY - (visibleHeight / 2)
+        let targetY = min(max(0, centeredY), maximumY)
+        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x,
+                                    y: targetY))
+        tableView.enclosingScrollView?.reflectScrolledClipView(clipView)
     }
 
     private func normalizeArchivePath(_ path: String) -> String {

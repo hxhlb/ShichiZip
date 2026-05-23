@@ -1,11 +1,18 @@
 import Foundation
 
+enum FileManagerFileSystemSelectionScrollPlacement {
+    case visible
+    case centered
+}
+
 struct FileManagerFileSystemSelectionState {
     let selectedPaths: Set<String>
     let focusedPath: String?
+    let scrollPlacement: FileManagerFileSystemSelectionScrollPlacement
 
     static let empty = FileManagerFileSystemSelectionState(selectedPaths: [],
-                                                           focusedPath: nil)
+                                                           focusedPath: nil,
+                                                           scrollPlacement: .visible)
 }
 
 @MainActor
@@ -34,7 +41,7 @@ final class FileManagerPaneDirectoryCoordinator {
     private let focusFileList: () -> Void
     private let selectRows: (IndexSet) -> Void
     private let deselectRows: () -> Void
-    private let scrollRowToVisible: (Int) -> Void
+    private let scrollRow: (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void
     private let showError: (Error) -> Void
     private let directoryDidChange: () -> Void
 
@@ -62,7 +69,7 @@ final class FileManagerPaneDirectoryCoordinator {
          focusFileList: @escaping () -> Void,
          selectRows: @escaping (IndexSet) -> Void,
          deselectRows: @escaping () -> Void,
-         scrollRowToVisible: @escaping (Int) -> Void,
+         scrollRow: @escaping (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void,
          showError: @escaping (Error) -> Void,
          directoryDidChange: @escaping () -> Void)
     {
@@ -82,7 +89,7 @@ final class FileManagerPaneDirectoryCoordinator {
         self.focusFileList = focusFileList
         self.selectRows = selectRows
         self.deselectRows = deselectRows
-        self.scrollRowToVisible = scrollRowToVisible
+        self.scrollRow = scrollRow
         self.showError = showError
         self.directoryDidChange = directoryDidChange
     }
@@ -203,7 +210,8 @@ final class FileManagerPaneDirectoryCoordinator {
         let selectedPaths = Set(selectedItems.map(\.url.standardizedFileURL.path))
         let focusedPath = focusedFileSystemItemPath() ?? selectedItems.first?.url.standardizedFileURL.path
         return FileManagerFileSystemSelectionState(selectedPaths: selectedPaths,
-                                                   focusedPath: focusedPath)
+                                                   focusedPath: focusedPath,
+                                                   scrollPlacement: .visible)
     }
 
     private func restoreSelectionState(_ selectionState: FileManagerFileSystemSelectionState) {
@@ -224,9 +232,9 @@ final class FileManagerPaneDirectoryCoordinator {
         if let focusedPath = selectionState.focusedPath,
            let row = items.firstIndex(where: { $0.url.standardizedFileURL.path == focusedPath }).map({ baseRow + $0 })
         {
-            scrollRowToVisible(row)
+            scrollRow(row, selectionState.scrollPlacement)
         } else if let firstRow = selectedRows.first {
-            scrollRowToVisible(firstRow)
+            scrollRow(firstRow, selectionState.scrollPlacement)
         }
     }
 

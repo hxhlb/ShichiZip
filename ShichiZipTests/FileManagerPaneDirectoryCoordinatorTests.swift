@@ -78,6 +78,37 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                        hostDirectory.standardizedFileURL)
     }
 
+    func testRevealSelectionRequestsCenteredScrollPlacement() throws {
+        let directoryURL = try makeTemporaryDirectory(named: "reveal-centered-selection",
+                                                      prefix: "ShichiZipDirectoryCoordinatorTests")
+        let firstURL = directoryURL.appendingPathComponent("alpha.txt")
+        let secondURL = directoryURL.appendingPathComponent("beta.txt")
+        try "alpha".write(to: firstURL,
+                          atomically: true,
+                          encoding: .utf8)
+        try "beta".write(to: secondURL,
+                         atomically: true,
+                         encoding: .utf8)
+
+        var selectedRows = IndexSet()
+        var scrolledRows: [(Int, FileManagerFileSystemSelectionScrollPlacement)] = []
+        let coordinator = makeCoordinator(selectRows: { selectedRows = $0 },
+                                          scrollRow: { row, placement in
+                                              scrolledRows.append((row, placement))
+                                          })
+        defer { coordinator.tearDown() }
+
+        XCTAssertTrue(coordinator.navigateToDirectory(directoryURL,
+                                                      showError: true,
+                                                      selectionState: FileManagerFileSystemSelectionState(selectedPaths: [secondURL.standardizedFileURL.path],
+                                                                                                          focusedPath: secondURL.standardizedFileURL.path,
+                                                                                                          scrollPlacement: .centered)))
+
+        XCTAssertEqual(selectedRows.count, 1)
+        XCTAssertEqual(scrolledRows.count, 1)
+        XCTAssertEqual(scrolledRows.first?.1, .centered)
+    }
+
     func testPaneDeinitWithoutLoadedViewDoesNotInitializeCoordinators() {
         weak var weakPane: FileManagerPaneController?
 
@@ -115,7 +146,7 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                  focusFileList: @escaping () -> Void = {},
                                  selectRows: @escaping (IndexSet) -> Void = { _ in },
                                  deselectRows: @escaping () -> Void = {},
-                                 scrollRowToVisible: @escaping (Int) -> Void = { _ in },
+                                 scrollRow: @escaping (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void = { _, _ in },
                                  showError: @escaping (Error) -> Void = { error in XCTFail("Unexpected directory coordinator error: \(error)") },
                                  directoryDidChange: @escaping () -> Void = {}) -> FileManagerPaneDirectoryCoordinator
     {
@@ -133,7 +164,7 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                             focusFileList: focusFileList,
                                             selectRows: selectRows,
                                             deselectRows: deselectRows,
-                                            scrollRowToVisible: scrollRowToVisible,
+                                            scrollRow: scrollRow,
                                             showError: showError,
                                             directoryDidChange: directoryDidChange)
     }

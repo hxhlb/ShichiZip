@@ -6,6 +6,7 @@ final class LaunchOpenCoordinator {
     private var initialFileManagerSuppressed = false
     private var inFlightOpenCount = 0
     private var awaitingLaunchOpenDelivery = false
+    private var didReceiveLaunchOpenDelivery = false
 
     /// `true` when the auto-presented initial file manager should be skipped.
     var shouldSuppressInitialFileManager: Bool {
@@ -21,8 +22,21 @@ final class LaunchOpenCoordinator {
 
     /// Record that the launch Apple Event promised a forthcoming open.
     func noteLaunchExpectsExternalOpen() {
+        guard !didReceiveLaunchOpenDelivery else {
+            initialFileManagerSuppressed = true
+            awaitingLaunchOpenDelivery = false
+            return
+        }
+
         awaitingLaunchOpenDelivery = true
         initialFileManagerSuppressed = true
+    }
+
+    /// Record that the promised launch/open payload has already arrived.
+    func noteLaunchOpenDelivered() {
+        didReceiveLaunchOpenDelivery = true
+        initialFileManagerSuppressed = true
+        awaitingLaunchOpenDelivery = false
     }
 
     /// Suppress the initial file manager without recording an in-flight open.
