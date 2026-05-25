@@ -297,7 +297,7 @@ extension CompressDialogController {
 
     enum ArchivePathHistory {
         private static var defaults: UserDefaults {
-            .standard
+            SZSharedUserDefaults.defaults
         }
 
         private static let entriesKey = "FileManager.CompressArchivePathHistory"
@@ -320,7 +320,7 @@ extension CompressDialogController {
 
     enum DialogPreferences {
         private static var defaults: UserDefaults {
-            .standard
+            SZSharedUserDefaults.defaults
         }
 
         private static let formatKey = "FileManager.CompressFormat"

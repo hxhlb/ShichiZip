@@ -39,6 +39,20 @@ SZ_DEFINE_7ZIP_GUID(IID_IFolderArchiveUpdateCallback_MoveArc, 0x01, 0x14);
 static NSString* const kSZWorkDirModePreferenceKey = @"WorkDirMode";
 static NSString* const kSZWorkDirPathPreferenceKey = @"WorkDirPath";
 static NSString* const kSZWorkDirRemovableOnlyPreferenceKey = @"WorkDirForRemovableOnly";
+static NSString* const kSZAppGroupIdentifierInfoKey = @"ShichiZipQuickActionAppGroupIdentifier";
+
+static NSUserDefaults* SZSharedNSUserDefaults(void) {
+    NSString* appGroupIdentifier =
+        [[NSBundle mainBundle] objectForInfoDictionaryKey:kSZAppGroupIdentifierInfoKey];
+    if (appGroupIdentifier.length > 0) {
+        NSUserDefaults* defaults = [[NSUserDefaults alloc] initWithSuiteName:appGroupIdentifier];
+        if (defaults) {
+            return defaults;
+        }
+    }
+
+    return [NSUserDefaults standardUserDefaults];
+}
 
 static UString SZToUString(NSString* string) {
     if (!string) {
@@ -79,7 +93,7 @@ bool SZWorkDirShouldUseConfiguredMode(const FString& path) {
 namespace NWorkDir {
 
 void CInfo::Save() const {
-    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    NSUserDefaults* defaults = SZSharedNSUserDefaults();
     [defaults setInteger:(NSInteger)Mode forKey:kSZWorkDirModePreferenceKey];
     [defaults setObject:SZToNSString(fs2us(Path)) forKey:kSZWorkDirPathPreferenceKey];
     [defaults setBool:ForRemovableOnly forKey:kSZWorkDirRemovableOnlyPreferenceKey];
@@ -88,7 +102,7 @@ void CInfo::Save() const {
 void CInfo::Load() {
     SetDefault();
 
-    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    NSUserDefaults* defaults = SZSharedNSUserDefaults();
     if ([defaults objectForKey:kSZWorkDirModePreferenceKey] != nil) {
         const NSInteger storedMode = [defaults integerForKey:kSZWorkDirModePreferenceKey];
         switch (storedMode) {

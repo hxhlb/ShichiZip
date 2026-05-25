@@ -103,11 +103,26 @@ static inline NSError* SZMakeDetailedError(NSInteger code, NSString* desc, NSStr
                            }];
 }
 
+static NSString* const SZSharedUserDefaultsAppGroupIdentifierInfoKey = @"ShichiZipQuickActionAppGroupIdentifier";
+
+static inline NSUserDefaults* SZSharedNSUserDefaults(void) {
+    NSString* appGroupIdentifier =
+        [[NSBundle mainBundle] objectForInfoDictionaryKey:SZSharedUserDefaultsAppGroupIdentifierInfoKey];
+    if (appGroupIdentifier.length > 0) {
+        NSUserDefaults* defaults = [[NSUserDefaults alloc] initWithSuiteName:appGroupIdentifier];
+        if (defaults) {
+            return defaults;
+        }
+    }
+
+    return [NSUserDefaults standardUserDefaults];
+}
+
 /// Look up a localized string: checks App.strings first, then Upstream.strings.
 /// Mirrors the SZL10n.string() Swift API for use in Objective-C bridge code.
 static inline NSString* SZLocalizedString(NSString* key) {
     // Check override bundle from language preference
-    NSString* override = [[NSUserDefaults standardUserDefaults] stringForKey:@"LanguageOverride"];
+    NSString* override = [SZSharedNSUserDefaults() stringForKey:@"LanguageOverride"];
     NSBundle* bundle = [NSBundle mainBundle];
     if (override.length > 0) {
         NSString* lpath = [bundle pathForResource:override ofType:@"lproj"];
@@ -164,11 +179,11 @@ static inline uint32_t SZRoundUpByteCountToGB(uint64_t byteCount) {
 }
 
 static inline BOOL SZExtractionMemoryLimitIsEnabled(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:SZExtractionMemoryLimitEnabledPreferenceKey];
+    return [SZSharedNSUserDefaults() boolForKey:SZExtractionMemoryLimitEnabledPreferenceKey];
 }
 
 static inline uint32_t SZConfiguredExtractionMemoryLimitGB(void) {
-    const NSInteger storedValue = [[NSUserDefaults standardUserDefaults] integerForKey:SZExtractionMemoryLimitGBPreferenceKey];
+    const NSInteger storedValue = [SZSharedNSUserDefaults() integerForKey:SZExtractionMemoryLimitGBPreferenceKey];
     return storedValue > 0 ? (uint32_t)storedValue : 4;
 }
 
@@ -184,7 +199,7 @@ static inline void SZPostSettingsDidChange(NSString* key) {
 
 static inline void SZPersistExtractionMemoryLimitGB(uint32_t limitGB) {
     const NSInteger resolvedLimitGB = MAX((NSInteger)limitGB, 1);
-    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    NSUserDefaults* defaults = SZSharedNSUserDefaults();
     [defaults setBool:YES forKey:SZExtractionMemoryLimitEnabledPreferenceKey];
     [defaults setInteger:resolvedLimitGB forKey:SZExtractionMemoryLimitGBPreferenceKey];
     SZPostSettingsDidChange(SZExtractionMemoryLimitEnabledPreferenceKey);

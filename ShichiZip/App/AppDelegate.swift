@@ -36,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
     }
 
     func applicationWillFinishLaunching(_: Notification) {
+        SZSharedUserDefaults.migrateStandardDefaultsIfNeeded()
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 

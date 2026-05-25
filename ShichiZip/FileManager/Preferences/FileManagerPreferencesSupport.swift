@@ -6,13 +6,13 @@ extension Notification.Name {
 }
 
 enum FileManagerPreferenceStore {
-    private static var defaults: UserDefaults {
-        .standard
+    static var defaults: UserDefaults {
+        SZSharedUserDefaults.defaults
     }
 
     static func bool(forKey key: String,
                      defaultValue: Bool,
-                     defaults: UserDefaults = .standard) -> Bool
+                     defaults: UserDefaults = FileManagerPreferenceStore.defaults) -> Bool
     {
         guard defaults.object(forKey: key) != nil else {
             return defaultValue
@@ -67,19 +67,19 @@ enum FileManagerWindowPreferences {
         remembersWindowFrame()
     }
 
-    static func remembersWindowFrame(defaults: UserDefaults = .standard) -> Bool {
+    static func remembersWindowFrame(defaults: UserDefaults = FileManagerPreferenceStore.defaults) -> Bool {
         FileManagerPreferenceStore.bool(forKey: rememberWindowFrameKey,
                                         defaultValue: false,
                                         defaults: defaults)
     }
 
     static func setRemembersWindowFrame(_ value: Bool,
-                                        defaults: UserDefaults = .standard)
+                                        defaults: UserDefaults = FileManagerPreferenceStore.defaults)
     {
         defaults.set(value, forKey: rememberWindowFrameKey)
     }
 
-    static func savedWindowFrame(defaults: UserDefaults = .standard) -> NSRect? {
+    static func savedWindowFrame(defaults: UserDefaults = FileManagerPreferenceStore.defaults) -> NSRect? {
         guard let storedFrame = defaults.string(forKey: savedWindowFrameKey) else { return nil }
         let frame = NSRectFromString(storedFrame)
         guard isValidWindowFrame(frame) else { return nil }
@@ -87,20 +87,20 @@ enum FileManagerWindowPreferences {
     }
 
     static func setSavedWindowFrame(_ frame: NSRect,
-                                    defaults: UserDefaults = .standard)
+                                    defaults: UserDefaults = FileManagerPreferenceStore.defaults)
     {
         guard isValidWindowFrame(frame) else { return }
         defaults.set(NSStringFromRect(frame), forKey: savedWindowFrameKey)
     }
 
-    static func resetSavedWindowFrame(defaults: UserDefaults = .standard) {
+    static func resetSavedWindowFrame(defaults: UserDefaults = FileManagerPreferenceStore.defaults) {
         defaults.removeObject(forKey: savedWindowFrameKey)
     }
 
     @discardableResult
     @MainActor
     static func applySavedWindowFrameIfNeeded(to window: NSWindow,
-                                              defaults: UserDefaults = .standard) -> Bool
+                                              defaults: UserDefaults = FileManagerPreferenceStore.defaults) -> Bool
     {
         guard remembersWindowFrame(defaults: defaults),
               let savedFrame = savedWindowFrame(defaults: defaults)

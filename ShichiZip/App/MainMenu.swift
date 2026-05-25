@@ -387,7 +387,7 @@ enum FileManagerFavoriteStore {
     static let slotCount = 10
 
     private static var defaults: UserDefaults {
-        .standard
+        SZSharedUserDefaults.defaults
     }
 
     private static let defaultsKey = "FileManager.Favorites"

@@ -77,7 +77,7 @@ enum LaunchOpenBrowseModifier: String {
 
 enum SZSettings {
     private static var defaults: UserDefaults {
-        .standard
+        SZSharedUserDefaults.defaults
     }
 
     private static func defaultBool(for key: SZSettingsKey) -> Bool {

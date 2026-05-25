@@ -104,7 +104,7 @@ final class ArchiveRoundTripTests: XCTestCase {
                                         removableOnly: Bool,
                                         _ body: () throws -> Void) throws
     {
-        let defaults = UserDefaults.standard
+        let defaults = SZSharedUserDefaults.defaults
         let keys: [SZSettingsKey] = [.workDirMode, .workDirPath, .workDirRemovableOnly]
         let previousValues = keys.map { ($0.rawValue, defaults.object(forKey: $0.rawValue)) }
         defaults.set(mode, forKey: SZSettingsKey.workDirMode.rawValue)

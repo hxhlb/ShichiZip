@@ -66,7 +66,7 @@ static uint32_t SZDialogRoundUpByteCountToGB(uint64_t byteCount) {
 
         _showPasswordButton = [NSButton checkboxWithTitle:SZLocalizedString(@"password.showPassword") target:self action:@selector(togglePasswordVisibility:)];
         _showPasswordButton.translatesAutoresizingMaskIntoConstraints = NO;
-        _showPasswordButton.state = [[NSUserDefaults standardUserDefaults] boolForKey:SZShowPasswordPreferenceKey] ? NSControlStateValueOn : NSControlStateValueOff;
+        _showPasswordButton.state = [SZSharedNSUserDefaults() boolForKey:SZShowPasswordPreferenceKey] ? NSControlStateValueOn : NSControlStateValueOff;
         _showPasswordButton.accessibilityIdentifier = @"passwordPrompt.showPassword";
     }
     return self;
@@ -454,7 +454,7 @@ static uint32_t SZDialogRoundUpByteCountToGB(uint64_t byteCount) {
         return NO;
     }
 
-    [[NSUserDefaults standardUserDefaults] setBool:accessoryController.showsPassword forKey:SZShowPasswordPreferenceKey];
+    [SZSharedNSUserDefaults() setBool:accessoryController.showsPassword forKey:SZShowPasswordPreferenceKey];
     if (password) {
         *password = accessoryController.password;
     }

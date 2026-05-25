@@ -43,7 +43,7 @@ extension FileManagerViewPreferences {
     }
 
     static func listViewInfo(forFolderTypeID folderTypeID: String,
-                             defaults: UserDefaults = .standard) -> ListViewInfo?
+                             defaults: UserDefaults = SZSharedUserDefaults.defaults) -> ListViewInfo?
     {
         guard let data = defaults.data(forKey: listViewInfoDefaultsKey(forFolderTypeID: folderTypeID)),
               let storedInfo = try? PropertyListDecoder().decode(StoredListViewInfo.self, from: data),
@@ -58,14 +58,14 @@ extension FileManagerViewPreferences {
 
     static func setListViewInfo(_ info: ListViewInfo,
                                 forFolderTypeID folderTypeID: String,
-                                defaults: UserDefaults = .standard)
+                                defaults: UserDefaults = SZSharedUserDefaults.defaults)
     {
         let storedInfo = StoredListViewInfo(info: info, version: listViewInfoVersion)
         guard let data = try? PropertyListEncoder().encode(storedInfo) else { return }
         defaults.set(data, forKey: listViewInfoDefaultsKey(forFolderTypeID: folderTypeID))
     }
 
-    static func removeAllListViewInfos(defaults: UserDefaults = .standard,
+    static func removeAllListViewInfos(defaults: UserDefaults = SZSharedUserDefaults.defaults,
                                        postsChangeNotification: Bool = true)
     {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(listViewInfoKeyPrefix) {
@@ -192,7 +192,7 @@ extension FileManagerViewPreferences {
 
     static func storedListViewColumnWidth(for column: FileManagerColumn,
                                           folderTypeID: String,
-                                          defaults: UserDefaults = .standard) -> CGFloat
+                                          defaults: UserDefaults = SZSharedUserDefaults.defaults) -> CGFloat
     {
         let storedWidth = listViewInfo(forFolderTypeID: folderTypeID,
                                        defaults: defaults)?
@@ -207,7 +207,7 @@ extension FileManagerViewPreferences {
 
     static func storedListViewColumnOrderIDs(folderTypeID: String,
                                              availableColumns: [FileManagerColumn],
-                                             defaults: UserDefaults = .standard) -> [FileManagerColumnID]
+                                             defaults: UserDefaults = SZSharedUserDefaults.defaults) -> [FileManagerColumnID]
     {
         let availableIDs = Set(availableColumns.map(\.id))
         var orderedIDs: [FileManagerColumnID] = []
@@ -232,7 +232,7 @@ extension FileManagerViewPreferences {
                                            currentColumnIDs: [FileManagerColumnID],
                                            folderTypeID: String,
                                            availableColumns: [FileManagerColumn],
-                                           defaults: UserDefaults = .standard) -> (from: Int, to: Int)?
+                                           defaults: UserDefaults = SZSharedUserDefaults.defaults) -> (from: Int, to: Int)?
     {
         let orderedIDs = storedListViewColumnOrderIDs(folderTypeID: folderTypeID,
                                                       availableColumns: availableColumns,

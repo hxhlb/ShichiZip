@@ -107,7 +107,7 @@ func szNormalizedDestinationDisplayPath(_ path: String) -> String {
 
 enum FileOperationDestinationHistory {
     private static var defaults: UserDefaults {
-        .standard
+        SZSharedUserDefaults.defaults
     }
 
     private static let entriesKey = "FileManager.CopyMoveDestinationHistory"

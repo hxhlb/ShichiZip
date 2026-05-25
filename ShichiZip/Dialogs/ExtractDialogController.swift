@@ -28,7 +28,7 @@ private final class ExtractDialogValidationContext {
 final class ExtractDialogController: NSObject {
     private enum DestinationHistory {
         private static var defaults: UserDefaults {
-            .standard
+            SZSharedUserDefaults.defaults
         }
 
         private static let entriesKey = "FileManager.ExtractDestinationHistory"
@@ -51,7 +51,7 @@ final class ExtractDialogController: NSObject {
 
     private enum DialogPreferences {
         private static var defaults: UserDefaults {
-            .standard
+            SZSharedUserDefaults.defaults
         }
 
         private static let pathModeKey = "FileManager.ExtractPathMode"
