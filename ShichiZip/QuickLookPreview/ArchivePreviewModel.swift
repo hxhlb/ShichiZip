@@ -1,8 +1,5 @@
 import Foundation
 
-@_silgen_name("ShichiZipLocalizationFrameworkAnchor")
-private func ShichiZipLocalizationFrameworkAnchor()
-
 struct ArchivePreviewSnapshot {
     let archiveURL: URL
     let items: [ArchiveItem]
@@ -1013,13 +1010,8 @@ enum ArchivePreviewLocalization {
         String(format: string(key), arguments: args)
     }
 
-    private static let localizationFrameworkAnchor: Void = {
-        ShichiZipLocalizationFrameworkAnchor()
-    }()
-
     private static var baseBundle: Bundle {
-        _ = localizationFrameworkAnchor
-        return localizationBundle() ?? .main
+        localizationBundle() ?? .main
     }
 
     private static func localizationBundle() -> Bundle? {

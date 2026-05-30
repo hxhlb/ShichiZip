@@ -1,11 +1,11 @@
 import Foundation
 
-class ShichiZipQuickActionRequestHandler: NSObject, NSExtensionRequestHandling {
+public class ShichiZipQuickActionRequestHandler: NSObject, NSExtensionRequestHandling {
     class var requestPolicy: ShichiZipQuickActionRequestPolicy {
         fatalError("Override requestPolicy in subclasses.")
     }
 
-    func beginRequest(with context: NSExtensionContext) {
+    public func beginRequest(with context: NSExtensionContext) {
         performSelector(onMainThread: #selector(beginRequestOnMainThread(_:)),
                         with: context,
                         waitUntilDone: false)
@@ -23,19 +23,22 @@ class ShichiZipQuickActionRequestHandler: NSObject, NSExtensionRequestHandling {
     }
 }
 
-final class ShowInFileManagerQuickActionHandler: ShichiZipQuickActionRequestHandler {
+@objc(ShowInFileManagerQuickActionHandler)
+public final class ShowInFileManagerQuickActionHandler: ShichiZipQuickActionRequestHandler {
     override class var requestPolicy: ShichiZipQuickActionRequestPolicy {
         .showInFileManager
     }
 }
 
-final class OpenInShichiZipQuickActionHandler: ShichiZipQuickActionRequestHandler {
+@objc(OpenInShichiZipQuickActionHandler)
+public final class OpenInShichiZipQuickActionHandler: ShichiZipQuickActionRequestHandler {
     override class var requestPolicy: ShichiZipQuickActionRequestPolicy {
         .openInShichiZip
     }
 }
 
-final class SmartQuickExtractQuickActionHandler: ShichiZipQuickActionRequestHandler {
+@objc(SmartQuickExtractQuickActionHandler)
+public final class SmartQuickExtractQuickActionHandler: ShichiZipQuickActionRequestHandler {
     override class var requestPolicy: ShichiZipQuickActionRequestPolicy {
         .smartQuickExtract
     }

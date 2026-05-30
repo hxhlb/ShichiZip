@@ -14,11 +14,13 @@ targets:
         excludes: &app_source_excludes
           - "**/*.entitlements"
           - "Resources/Localization/**"
-          - "QuickActions/Extensions/**"
+          - "QuickActions/**"
           - "QuickLookPreview/Extension/**"
     dependencies:
       - sdk: AppIntents.framework
       - target: ShichiZipLocalization
+        embed: true
+      - target: ShichiZipQuickActionCore
         embed: true
       - target: ShichiZipArchiveCore
         embed: true
@@ -45,6 +47,10 @@ targets:
             - $(inherited)
             - -liconv
             - -lpthread
+            - -Xlinker
+            - -needed_framework
+            - -Xlinker
+            - ShichiZipLocalization
           MACOSX_DEPLOYMENT_TARGET: "13.0"
           GENERATE_INFOPLIST_FILE: false
           CLANG_ENABLE_OBJC_ARC: true
@@ -75,6 +81,7 @@ targets:
     dependencies:
       - target: ShichiZip
       - target: ShichiZipArchiveCore
+      - target: ShichiZipQuickActionCore
       - sdk: AppIntents.framework
     settings:
       base:
@@ -113,6 +120,7 @@ targets:
     dependencies:
       - target: ShichiZipZS
       - target: ShichiZipZSArchiveCore
+      - target: ShichiZipQuickActionCore
       - sdk: AppIntents.framework
     settings:
       base:
@@ -157,6 +165,8 @@ targets:
     dependencies:
       - sdk: AppIntents.framework
       - target: ShichiZipLocalization
+        embed: true
+      - target: ShichiZipQuickActionCore
         embed: true
       - target: ShichiZipZSArchiveCore
         embed: true

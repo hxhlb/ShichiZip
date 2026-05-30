@@ -1,4 +1,5 @@
 import Foundation
+@testable import ShichiZipQuickActionCore
 #if SHICHIZIP_ZS_VARIANT
     @testable import ShichiZip_ZS
 #else

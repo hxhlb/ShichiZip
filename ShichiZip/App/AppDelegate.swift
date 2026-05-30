@@ -1,5 +1,6 @@
 import Cocoa
 import os
+import ShichiZipQuickActionCore
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouting {

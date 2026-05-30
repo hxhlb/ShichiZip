@@ -20,7 +20,7 @@ enum ShichiZipQuickActionAppInfo {
     }
 }
 
-enum ShichiZipQuickAction: String, Codable {
+public enum ShichiZipQuickAction: String, Codable, Sendable {
     case showInFileManager = "show-in-file-manager"
     case openInShichiZip = "open-in-shichizip"
     case smartQuickExtract = "smart-quick-extract"
@@ -37,25 +37,25 @@ enum ShichiZipQuickAction: String, Codable {
     }
 }
 
-struct ShichiZipQuickActionRequest: Codable {
-    static let currentVersion = 1
+public struct ShichiZipQuickActionRequest: Codable, Sendable {
+    public static let currentVersion = 1
 
-    let version: Int
-    let action: ShichiZipQuickAction
-    let paths: [String]
+    public let version: Int
+    public let action: ShichiZipQuickAction
+    public let paths: [String]
 
-    init(action: ShichiZipQuickAction, fileURLs: [URL]) {
+    public init(action: ShichiZipQuickAction, fileURLs: [URL]) {
         version = Self.currentVersion
         self.action = action
         paths = fileURLs.map(\.standardizedFileURL.path)
     }
 
-    var fileURLs: [URL] {
+    public var fileURLs: [URL] {
         paths.map { URL(fileURLWithPath: $0).standardizedFileURL }
     }
 }
 
-enum ShichiZipQuickActionError: LocalizedError {
+public enum ShichiZipQuickActionError: LocalizedError, Sendable {
     case invalidLaunchURL
     case missingPayload
     case invalidPayload
@@ -64,7 +64,7 @@ enum ShichiZipQuickActionError: LocalizedError {
     case temporaryRepresentationUnsupported(ShichiZipQuickAction)
     case unsupportedSelection(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidLaunchURL:
             "The Quick Action launch URL is invalid."

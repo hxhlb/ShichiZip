@@ -1,6 +1,6 @@
 targets:
-  ShichiZipRevealInFileManagerAction:
-    type: app-extension
+  ShichiZipQuickActionCore:
+    type: framework
     platform: macOS
     postBuildScripts: &generate_build_metadata
       - name: Generate Build Metadata
@@ -16,11 +16,35 @@ targets:
           - "Resources/**"
       - &shared_swift_log_source
         path: ../../ShichiZip/Utilities/SZLog.swift
+    dependencies:
+      - sdk: AppKit.framework
+      - sdk: Security.framework
+      - sdk: UniformTypeIdentifiers.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ee.dawn.ShichiZip.QuickActionCore
+        PRODUCT_NAME: ShichiZipQuickActionCore
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        GENERATE_INFOPLIST_FILE: true
+        DEFINES_MODULE: true
+        APPLICATION_EXTENSION_API_ONLY: true
+        CLANG_ENABLE_OBJC_ARC: true
+        CLANG_WARN_DOCUMENTATION_COMMENTS: false
+        STRIP_STYLE: non-global
+
+  ShichiZipRevealInFileManagerAction:
+    type: app-extension
+    platform: macOS
+    postBuildScripts: *generate_build_metadata
+    sources:
+      - &quick_action_extension_executable_source
+        path: ../stubs/EmptyExecutable.m
       - path: ../generated/quick-actions/ShichiZipRevealInFileManagerAction
         buildPhase: resources
         optional: true
     dependencies: &quick_action_dependencies
       - sdk: AppIntents.framework
+      - target: ShichiZipQuickActionCore
     settings:
       base:
         <<: &quick_action_mainline_settings
@@ -28,6 +52,16 @@ targets:
           MACOSX_DEPLOYMENT_TARGET: "13.0"
           GENERATE_INFOPLIST_FILE: false
           APPLICATION_EXTENSION_API_ONLY: true
+          LD_RUNPATH_SEARCH_PATHS:
+            - $(inherited)
+            - "@executable_path/../Frameworks"
+            - "@executable_path/../../../../Frameworks"
+          OTHER_LDFLAGS:
+            - $(inherited)
+            - -Xlinker
+            - -needed_framework
+            - -Xlinker
+            - ShichiZipQuickActionCore
           SHICHIZIP_HOST_APP_DISPLAY_NAME: ShichiZip
           SHICHIZIP_QUICK_ACTION_APP_GROUP_IDENTIFIER: $(DEVELOPMENT_TEAM).ShichiZip
           SHICHIZIP_QUICK_ACTION_URL_SCHEME: shichizip
@@ -60,15 +94,14 @@ targets:
               SUBQUERY($extensionItem.attachments, $attachment,
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count ==
               $extensionItem.attachments.@count).@count == 1
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShowInFileManagerQuickActionHandler
+          NSExtensionPrincipalClass: ShowInFileManagerQuickActionHandler
 
   ShichiZipOpenInShichiZipAction:
     type: app-extension
     platform: macOS
     postBuildScripts: *generate_build_metadata
     sources:
-      - *quick_action_swift_sources
-      - *shared_swift_log_source
+      - *quick_action_extension_executable_source
       - path: ../generated/quick-actions/ShichiZipOpenInShichiZipAction
         buildPhase: resources
         optional: true
@@ -91,15 +124,14 @@ targets:
               SUBQUERY(extensionItems, $extensionItem, $extensionItem.attachments.@count == 1 &&
               SUBQUERY($extensionItem.attachments, $attachment,
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == 1).@count == 1
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).OpenInShichiZipQuickActionHandler
+          NSExtensionPrincipalClass: OpenInShichiZipQuickActionHandler
 
   ShichiZipSmartQuickExtractAction:
     type: app-extension
     platform: macOS
     postBuildScripts: *generate_build_metadata
     sources:
-      - *quick_action_swift_sources
-      - *shared_swift_log_source
+      - *quick_action_extension_executable_source
       - path: ../generated/quick-actions/ShichiZipSmartQuickExtractAction
         buildPhase: resources
         optional: true
@@ -189,15 +221,14 @@ targets:
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.plougher.squashfs-archive" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.servmask.wpress-backup" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.rileytestut.delta.skin").@count == 1).@count == 1
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SmartQuickExtractQuickActionHandler
+          NSExtensionPrincipalClass: SmartQuickExtractQuickActionHandler
 
   ShichiZipZSRevealInFileManagerAction:
     type: app-extension
     platform: macOS
     postBuildScripts: *generate_build_metadata
     sources:
-      - *quick_action_swift_sources
-      - *shared_swift_log_source
+      - *quick_action_extension_executable_source
       - path: ../generated/quick-actions/ShichiZipZSRevealInFileManagerAction
         buildPhase: resources
         optional: true
@@ -224,8 +255,7 @@ targets:
     platform: macOS
     postBuildScripts: *generate_build_metadata
     sources:
-      - *quick_action_swift_sources
-      - *shared_swift_log_source
+      - *quick_action_extension_executable_source
       - path: ../generated/quick-actions/ShichiZipZSOpenInShichiZipAction
         buildPhase: resources
         optional: true
@@ -245,8 +275,7 @@ targets:
     platform: macOS
     postBuildScripts: *generate_build_metadata
     sources:
-      - *quick_action_swift_sources
-      - *shared_swift_log_source
+      - *quick_action_extension_executable_source
       - path: ../generated/quick-actions/ShichiZipZSSmartQuickExtractAction
         buildPhase: resources
         optional: true

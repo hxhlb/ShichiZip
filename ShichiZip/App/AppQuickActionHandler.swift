@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ShichiZipQuickActionCore
 
 @MainActor
 final class AppQuickActionHandler {

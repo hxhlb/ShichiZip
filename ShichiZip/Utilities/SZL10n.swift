@@ -1,9 +1,6 @@
 import Foundation
 import os
 
-@_silgen_name("ShichiZipLocalizationFrameworkAnchor")
-private func ShichiZipLocalizationFrameworkAnchor()
-
 /// Centralized lookup for localized UI strings.
 ///
 /// Strings sourced from the upstream 7-Zip translation project live in
@@ -120,13 +117,8 @@ enum SZL10n {
 
     // MARK: - Private
 
-    private static let localizationFrameworkAnchor: Void = {
-        ShichiZipLocalizationFrameworkAnchor()
-    }()
-
     private static var baseBundle: Bundle {
-        _ = localizationFrameworkAnchor
-        return localizationBundle() ?? .main
+        localizationBundle() ?? .main
     }
 
     private static func localizationBundle() -> Bundle? {

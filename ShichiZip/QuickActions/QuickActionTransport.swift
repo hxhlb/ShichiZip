@@ -2,7 +2,7 @@ import Foundation
 import os
 import Security
 
-enum ShichiZipQuickActionTransport {
+public enum ShichiZipQuickActionTransport {
     private static let launchHost = "quick-action"
     private static let launchPath = "/finder"
     private static let requestQueryItemName = "request"
@@ -21,7 +21,7 @@ enum ShichiZipQuickActionTransport {
         Bundle.main.bundleIdentifier ?? "<unknown>"
     }
 
-    static var urlScheme: String {
+    public static var urlScheme: String {
         infoString(forKey: urlSchemeInfoKey) ?? defaultURLScheme
     }
 
@@ -29,7 +29,7 @@ enum ShichiZipQuickActionTransport {
         infoString(forKey: appGroupIdentifierInfoKey)
     }
 
-    static func canHandle(_ url: URL) -> Bool {
+    public static func canHandle(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(),
               let host = url.host?.lowercased()
         else {
@@ -47,7 +47,7 @@ enum ShichiZipQuickActionTransport {
         return launchURL
     }
 
-    static func consumeRequest(from launchURL: URL) throws -> ShichiZipQuickActionRequest {
+    public static func consumeRequest(from launchURL: URL) throws -> ShichiZipQuickActionRequest {
         let requestFileURL = try requestFileURL(from: launchURL)
         log("consuming request bundle=\(bundleIdentifier) appGroupIdentifier=\(appGroupIdentifier ?? "<missing>") requestFile=\(requestFileURL.path) launchURL=\(launchURL.absoluteString)")
         defer { removeRequestFile(at: requestFileURL, reason: "consumed") }
@@ -82,7 +82,7 @@ enum ShichiZipQuickActionTransport {
         removeRequestFile(at: requestFileURL, reason: "released")
     }
 
-    static func cleanupStalePayloads(now: Date = Date()) {
+    public static func cleanupStalePayloads(now: Date = Date()) {
         guard let requestDirectoryURL = try? requestDirectoryURL(),
               let requestFileURLs = try? FileManager.default.contentsOfDirectory(at: requestDirectoryURL,
                                                                                  includingPropertiesForKeys: [.isRegularFileKey,

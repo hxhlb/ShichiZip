@@ -10,7 +10,7 @@ targets:
         script: |
           sh "${SRCROOT}/project/scripts/generate-build-metadata.sh"
     sources:
-      - path: ../localization-framework/ShichiZipLocalizationAnchor.m
+      - path: ../stubs/EmptyExecutable.m
       - path: ../../ShichiZip/Resources/Localization
         buildPhase: resources
     settings:
