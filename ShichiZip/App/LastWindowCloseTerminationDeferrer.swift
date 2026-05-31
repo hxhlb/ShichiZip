@@ -4,7 +4,6 @@ import AppKit
 final class LastWindowCloseTerminationDeferrer: NSObject {
     private weak var mostRecentClosingWindow: NSWindow?
     private var isObservingWindowWillClose = false
-    private var hasPendingTermination = false
     private var pendingAnimationWindow: NSWindow?
 
     private let notificationCenter: NotificationCenter
@@ -33,11 +32,16 @@ final class LastWindowCloseTerminationDeferrer: NSObject {
         isObservingWindowWillClose = true
     }
 
-    func deferTerminationUntilCloseAnimationFinishes() {
+    /// Returns true when termination is deferred until AppKit's close animation finishes.
+    /// Returns false when there is no visible closing window to wait for, so the caller
+    /// should allow immediate termination.
+    func deferTerminationUntilCloseAnimationFinishes() -> Bool {
         clearPendingAnimationObserver()
 
-        hasPendingTermination = true
-        pendingAnimationWindow = mostRecentClosingWindow
+        guard let closingWindow = mostRecentClosingWindow else {
+            return false
+        }
+        pendingAnimationWindow = closingWindow
         mostRecentClosingWindow = nil
 
         // Retain and filter to the window that triggered AppKit's last-window-close decision
@@ -46,6 +50,7 @@ final class LastWindowCloseTerminationDeferrer: NSObject {
                                        selector: #selector(windowDidOrderOffScreenAndFinishAnimating(_:)),
                                        name: Self.windowDidOrderOffScreenAndFinishAnimatingNotification,
                                        object: pendingAnimationWindow)
+        return true
     }
 
     func stop() {
@@ -59,7 +64,15 @@ final class LastWindowCloseTerminationDeferrer: NSObject {
     }
 
     @objc private func windowWillClose(_ notification: Notification) {
-        mostRecentClosingWindow = notification.object as? NSWindow
+        guard let window = notification.object as? NSWindow else { return }
+        guard !Self.shouldIgnoreCloseAnimationWindow(window) else {
+            // Do not let an older close candidate drive a newer last-window-close
+            // decision when AppKit's latest notification is already off-screen.
+            mostRecentClosingWindow = nil
+            return
+        }
+
+        mostRecentClosingWindow = window
     }
 
     @objc private func windowDidOrderOffScreenAndFinishAnimating(_: Notification) {
@@ -67,19 +80,24 @@ final class LastWindowCloseTerminationDeferrer: NSObject {
     }
 
     private func terminateIfStillNeeded() {
-        guard hasPendingTermination else { return }
         clearPendingAnimationObserver()
         guard shouldTerminate() else { return }
         terminate()
     }
 
     private func clearPendingAnimationObserver() {
-        if hasPendingTermination {
-            notificationCenter.removeObserver(self,
-                                              name: Self.windowDidOrderOffScreenAndFinishAnimatingNotification,
-                                              object: pendingAnimationWindow)
-        }
-        hasPendingTermination = false
+        guard let window = pendingAnimationWindow else { return }
+        notificationCenter.removeObserver(self,
+                                          name: Self.windowDidOrderOffScreenAndFinishAnimatingNotification,
+                                          object: window)
         pendingAnimationWindow = nil
+    }
+
+    private static func shouldIgnoreCloseAnimationWindow(_ window: NSWindow) -> Bool {
+        // macOS can post a close notification for an already invisible private
+        // window, such as TUINSWindow after modal cancellation. Such windows do
+        // not emit the private close-animation-finished notification, so waiting
+        // on them prevents quit-on-last-close.
+        !window.isVisible
     }
 }

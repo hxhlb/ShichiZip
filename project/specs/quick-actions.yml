@@ -126,6 +126,38 @@ targets:
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == 1).@count == 1
           NSExtensionPrincipalClass: OpenInShichiZipQuickActionHandler
 
+  ShichiZipCompressAction:
+    type: app-extension
+    platform: macOS
+    postBuildScripts: *generate_build_metadata
+    sources:
+      - *quick_action_extension_executable_source
+      - path: ../generated/quick-actions/ShichiZipCompressAction
+        buildPhase: resources
+        optional: true
+    dependencies: *quick_action_dependencies
+    settings:
+      base:
+        <<: *quick_action_mainline_settings
+        PRODUCT_BUNDLE_IDENTIFIER: ee.dawn.ShichiZip.CompressAction
+        PRODUCT_NAME: ShichiZipCompressAction
+        SHICHIZIP_QUICK_ACTION_DISPLAY_NAME: "SZ: Compress"
+    info:
+      path: ../generated/plists/ShichiZipCompressAction-Info.plist
+      properties: &compress_quick_action_info
+        <<: *quick_action_info_common
+        NSExtension:
+          <<: *quick_action_extension_common
+          NSExtensionAttributes:
+            <<: *quick_action_extension_attributes_common
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $extensionItem, $extensionItem.attachments.@count >= 1 &&
+              $extensionItem.attachments.@count <= 64 &&
+              SUBQUERY($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count ==
+              $extensionItem.attachments.@count).@count == 1
+          NSExtensionPrincipalClass: CompressQuickActionHandler
+
   ShichiZipSmartQuickExtractAction:
     type: app-extension
     platform: macOS
@@ -269,6 +301,26 @@ targets:
     info:
       path: ../generated/plists/ShichiZipZSOpenInShichiZipAction-Info.plist
       properties: *open_quick_action_info
+
+  ShichiZipZSCompressAction:
+    type: app-extension
+    platform: macOS
+    postBuildScripts: *generate_build_metadata
+    sources:
+      - *quick_action_extension_executable_source
+      - path: ../generated/quick-actions/ShichiZipZSCompressAction
+        buildPhase: resources
+        optional: true
+    dependencies: *quick_action_dependencies
+    settings:
+      base:
+        <<: *quick_action_zs_settings
+        PRODUCT_BUNDLE_IDENTIFIER: ee.dawn.ShichiZipZS.CompressAction
+        PRODUCT_NAME: ShichiZipZSCompressAction
+        SHICHIZIP_QUICK_ACTION_DISPLAY_NAME: "SZ ZS: Compress"
+    info:
+      path: ../generated/plists/ShichiZipZSCompressAction-Info.plist
+      properties: *compress_quick_action_info
 
   ShichiZipZSSmartQuickExtractAction:
     type: app-extension

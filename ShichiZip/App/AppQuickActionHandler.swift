@@ -36,6 +36,8 @@ final class AppQuickActionHandler {
             try handleShowInFileManager(request)
         case .openInShichiZip:
             try handleOpenInShichiZip(request)
+        case .compress:
+            try handleCompress(request)
         case .smartQuickExtract:
             try handleSmartQuickExtract(request)
         }
@@ -62,6 +64,32 @@ final class AppQuickActionHandler {
         _ = fileManagerWindowRegistry.openFileSystemItemInNewFileManager(itemURL)
     }
 
+    private func handleCompress(_ request: ShichiZipQuickActionRequest) throws {
+        let fileURLs = try existingFileURLs(from: request)
+        SZLog.info(Self.logPrefix, "compress presenting dialog urls=\(fileURLs.map(\.path).joined(separator: ", "))")
+
+        Task { @MainActor in
+            let dialog = CompressDialogController(sourceURLs: fileURLs)
+            // Finder Quick Actions should present independently, not as a sheet on
+            // whichever ShichiZip window happens to be key.
+            guard let result = await dialog.runModal(for: nil) else { return }
+
+            do {
+                try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("progress.compressing"),
+                                                     parentWindow: nil)
+                { session in
+                    try SZArchive.create(atPath: result.archiveURL.path,
+                                         fromPaths: fileURLs.map(\.path),
+                                         settings: result.settings,
+                                         session: session)
+                }
+                NSWorkspace.shared.selectFile(result.archiveURL.path, inFileViewerRootedAtPath: "")
+            } catch {
+                szPresentError(error, for: nil)
+            }
+        }
+    }
+
     private func handleSmartQuickExtract(_ request: ShichiZipQuickActionRequest) throws {
         let archiveURL = try existingSingleFileURL(from: request,
                                                    selectionError: SZL10n.string("app.fileManager.selectArchiveToExtract"),
@@ -73,7 +101,7 @@ final class AppQuickActionHandler {
     }
 
     private func existingFileURLs(from request: ShichiZipQuickActionRequest) throws -> [URL] {
-        let fileURLs = request.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+        let fileURLs = request.fileURLs.filter { FileManager.default.szExistingItemKind(at: $0) != nil }
         guard !fileURLs.isEmpty else {
             throw ShichiZipQuickActionError.unsupportedSelection("The selected files are no longer available.")
         }

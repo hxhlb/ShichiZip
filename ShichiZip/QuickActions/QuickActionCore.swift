@@ -23,6 +23,7 @@ enum ShichiZipQuickActionAppInfo {
 public enum ShichiZipQuickAction: String, Codable, Sendable {
     case showInFileManager = "show-in-file-manager"
     case openInShichiZip = "open-in-shichizip"
+    case compress
     case smartQuickExtract = "smart-quick-extract"
 
     var unsupportedTemporaryRepresentationMessage: String {
@@ -31,6 +32,8 @@ public enum ShichiZipQuickAction: String, Codable, Sendable {
             "The selected item was only provided as a temporary copy, so it can't be revealed safely. Try selecting the original file or folder directly in Finder."
         case .openInShichiZip:
             "The selected item was only provided as a temporary copy, so it can't be opened safely in \(ShichiZipQuickActionAppInfo.hostAppDisplayName). Try selecting the original file or folder directly in Finder."
+        case .compress:
+            "The selected item was only provided as a temporary copy, so it can't be compressed safely. Try selecting the original file or folder directly in Finder."
         case .smartQuickExtract:
             "The selected archive was only provided as a temporary copy, so it can't be extracted safely. Try selecting the original archive directly in Finder."
         }

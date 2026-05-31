@@ -69,12 +69,14 @@ final class QuickActionExtensionEntryTests: XCTestCase {
             [
                 "ShichiZipZSRevealInFileManagerAction",
                 "ShichiZipZSOpenInShichiZipAction",
+                "ShichiZipZSCompressAction",
                 "ShichiZipZSSmartQuickExtractAction",
             ]
         #else
             [
                 "ShichiZipRevealInFileManagerAction",
                 "ShichiZipOpenInShichiZipAction",
+                "ShichiZipCompressAction",
                 "ShichiZipSmartQuickExtractAction",
             ]
         #endif

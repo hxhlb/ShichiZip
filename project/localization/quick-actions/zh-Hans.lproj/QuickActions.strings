@@ -11,4 +11,5 @@
 "quickAction.app.shichizipzs" = "ShichiZip ZS";
 
 "quickAction.action.reveal" = "在文件管理器中显示";
+"quickAction.action.compress" = "压缩";
 "quickAction.action.extract" = "智能快速解压";

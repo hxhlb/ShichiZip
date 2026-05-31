@@ -37,6 +37,13 @@ public final class OpenInShichiZipQuickActionHandler: ShichiZipQuickActionReques
     }
 }
 
+@objc(CompressQuickActionHandler)
+public final class CompressQuickActionHandler: ShichiZipQuickActionRequestHandler {
+    override class var requestPolicy: ShichiZipQuickActionRequestPolicy {
+        .compress
+    }
+}
+
 @objc(SmartQuickExtractQuickActionHandler)
 public final class SmartQuickExtractQuickActionHandler: ShichiZipQuickActionRequestHandler {
     override class var requestPolicy: ShichiZipQuickActionRequestPolicy {

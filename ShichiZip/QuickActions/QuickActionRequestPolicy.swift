@@ -41,6 +41,10 @@ extension ShichiZipQuickActionRequestPolicy {
                                           })
     }
 
+    static let compress = ShichiZipQuickActionRequestPolicy(action: .compress,
+                                                            exactSelectionCount: nil,
+                                                            exactSelectionMessage: nil)
+
     static var smartQuickExtract: ShichiZipQuickActionRequestPolicy {
         ShichiZipQuickActionRequestPolicy(action: .smartQuickExtract,
                                           exactSelectionCount: 1,

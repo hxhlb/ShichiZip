@@ -28,6 +28,8 @@ targets:
         embed: true
       - target: ShichiZipOpenInShichiZipAction
         embed: true
+      - target: ShichiZipCompressAction
+        embed: true
       - target: ShichiZipSmartQuickExtractAction
         embed: true
       - target: ShichiZipArchivePreviewExtension
@@ -173,6 +175,8 @@ targets:
       - target: ShichiZipZSRevealInFileManagerAction
         embed: true
       - target: ShichiZipZSOpenInShichiZipAction
+        embed: true
+      - target: ShichiZipZSCompressAction
         embed: true
       - target: ShichiZipZSSmartQuickExtractAction
         embed: true

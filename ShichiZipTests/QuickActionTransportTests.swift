@@ -59,6 +59,22 @@ final class QuickActionTransportTests: XCTestCase {
         XCTAssertEqual(stagedPayloadURLs().count, 0)
     }
 
+    func testCompressLaunchURLRoundTripsMultipleSelectedItems() throws {
+        let sourceURLs = [
+            URL(fileURLWithPath: "/tmp/../tmp/source.txt"),
+            URL(fileURLWithPath: "/tmp/folder"),
+        ]
+        let request = ShichiZipQuickActionRequest(action: .compress,
+                                                  fileURLs: sourceURLs)
+
+        let launchURL = try ShichiZipQuickActionTransport.launchURL(for: request)
+        let consumedRequest = try ShichiZipQuickActionTransport.consumeRequest(from: launchURL)
+
+        XCTAssertEqual(consumedRequest.action, .compress)
+        XCTAssertEqual(consumedRequest.fileURLs, sourceURLs.map(\.standardizedFileURL))
+        XCTAssertEqual(stagedPayloadURLs().count, 0)
+    }
+
     func testSmartQuickExtractLaunchURLRejectsDifferentScheme() throws {
         let request = ShichiZipQuickActionRequest(action: .smartQuickExtract,
                                                   fileURLs: [URL(fileURLWithPath: "/tmp/archive.7z")])

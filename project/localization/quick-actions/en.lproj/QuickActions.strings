@@ -11,4 +11,5 @@
 "quickAction.app.shichizipzs" = "ShichiZip ZS";
 
 "quickAction.action.reveal" = "Reveal in File Manager";
+"quickAction.action.compress" = "Compress";
 "quickAction.action.extract" = "Smart Quick Extract";

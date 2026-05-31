@@ -14,9 +14,11 @@ ENTRY_PATTERN = re.compile(r'^\s*"((?:[^"\\]|\\.)+)"\s*=\s*"((?:[^"\\]|\\.)*)";\
 TARGETS = {
     "ShichiZipRevealInFileManagerAction": {"variant": "shichizip", "action": "reveal"},
     "ShichiZipOpenInShichiZipAction": {"variant": "shichizip", "action": "open"},
+    "ShichiZipCompressAction": {"variant": "shichizip", "action": "compress"},
     "ShichiZipSmartQuickExtractAction": {"variant": "shichizip", "action": "extract"},
     "ShichiZipZSRevealInFileManagerAction": {"variant": "shichizipzs", "action": "reveal"},
     "ShichiZipZSOpenInShichiZipAction": {"variant": "shichizipzs", "action": "open"},
+    "ShichiZipZSCompressAction": {"variant": "shichizipzs", "action": "compress"},
     "ShichiZipZSSmartQuickExtractAction": {"variant": "shichizipzs", "action": "extract"},
 }
 
