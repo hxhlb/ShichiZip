@@ -25,6 +25,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
     private var deleteTemporaryFilesWindowController: DeleteTemporaryFilesWindowController?
     private var settingsWindowController: SettingsWindowController?
     private let launchOpenCoordinator = LaunchOpenCoordinator()
+    private lazy var lastWindowCloseTerminationDeferrer = LastWindowCloseTerminationDeferrer(
+        shouldTerminate: { [weak self] in
+            guard let self else { return false }
+            return SZSettings.bool(.quitAfterLastWindowClosed)
+                && !launchOpenCoordinator.shouldKeepProcessAlive
+                && !NSApp.windows.contains(where: \.isVisible)
+        },
+        terminate: {
+            NSApp.terminate(nil)
+        },
+    )
 
     override init() {
         let fileManagerWindowRegistry = FileManagerWindowRegistry()
@@ -43,6 +54,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ShichiZipQuickActionTransport.cleanupStalePayloads()
+        if #available(macOS 26.0, *) {
+            lastWindowCloseTerminationDeferrer.startObservingClosingWindows()
+        }
         MainMenu.setup()
         var isDefaultLaunch = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
         SZLog.info("AppDelegate", "didFinishLaunching isDefaultLaunch=\(isDefaultLaunch)")
@@ -74,7 +88,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         }
     }
 
-    func applicationWillTerminate(_: Notification) {}
+    func applicationWillTerminate(_: Notification) {
+        if #available(macOS 26.0, *) {
+            lastWindowCloseTerminationDeferrer.stop()
+        }
+    }
 
     func applicationShouldOpenUntitledFile(_: NSApplication) -> Bool {
         false
@@ -89,7 +107,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         guard SZSettings.bool(.quitAfterLastWindowClosed) else { return false }
-        return !launchOpenCoordinator.shouldKeepProcessAlive
+        guard !launchOpenCoordinator.shouldKeepProcessAlive else { return false }
+        if #available(macOS 26.0, *) {
+            lastWindowCloseTerminationDeferrer.deferTerminationUntilCloseAnimationFinishes()
+            return false
+        }
+        return true
     }
 
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
