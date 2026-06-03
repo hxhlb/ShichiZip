@@ -133,6 +133,7 @@ ShichiZip/             Swift/Objective-C++ app sources
 ├── FileManager/       Main File Manager UI
 ├── Model/             Archive entry and filesystem item models
 ├── QuickActions/      Finder Quick Action extensions
+├── QuickLookPreview/  Archive Quick Look preview extension
 ├── Resources/         Assets, Info.plist fragments, localization
 └── Utilities/         Shared helpers
 
@@ -147,7 +148,9 @@ vendor/                Upstream 7-Zip source (submodules) and patches
 └── SZ*.mm             Small Objective-C++ shims linked into the library
 
 project/
-├── specs/             XcodeGen specs (base.yml, apps.yml, quick-actions.yml)
+├── archive-core/      ArchiveCore framework bootstrap source
+├── specs/             XcodeGen specs
+├── stubs/             Empty executable stubs for frameworks and extensions
 ├── scripts/           Localization, build metadata, packaging helpers
 ├── localization/      Source localization data (see README)
 └── generated/         Files produced by xcodegen / scripts (gitignored)
