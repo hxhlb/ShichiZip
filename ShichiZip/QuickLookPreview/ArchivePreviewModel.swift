@@ -577,7 +577,7 @@ enum ArchivePreviewLoader {
 }
 
 enum ArchivePreviewPresentation {
-    static let hiddenAttributeMask: UInt32 = 0x2
+    static let hiddenAttributeMask = HiddenItemVisibility.hiddenAttributeMask
 
     static func rows(for items: [ArchiveItem],
                      columns: [ArchivePreviewColumn]) -> [ArchivePreviewRow]
@@ -596,20 +596,14 @@ enum ArchivePreviewPresentation {
     }
 
     static func isHidden(_ item: ArchiveItem) -> Bool {
-        isHidden(pathParts: item.pathParts,
-                 attributes: item.attributes)
+        item.isHidden
     }
 
     static func isHidden(pathParts: [String],
                          attributes: UInt32 = 0) -> Bool
     {
-        if attributes & hiddenAttributeMask != 0 {
-            return true
-        }
-
-        return pathParts.contains { component in
-            component.hasPrefix(".") && component != "." && component != ".."
-        }
+        HiddenItemVisibility.isHidden(pathParts: pathParts,
+                                      attributes: attributes)
     }
 
     static func summary(for items: [ArchiveItem]) -> ArchivePreviewSummary {

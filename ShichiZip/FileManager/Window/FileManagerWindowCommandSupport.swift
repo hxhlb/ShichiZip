@@ -701,6 +701,7 @@ enum FileManagerCommandValidator {
         case #selector(FileManagerWindowController.deselectAllItems(_:)):
             return capabilities.canDeselectSelection
         case #selector(FileManagerWindowController.refreshActivePane(_:)),
+             #selector(FileManagerWindowController.toggleHiddenFiles(_:)),
              #selector(FileManagerWindowController.sortByName(_:)),
              #selector(FileManagerWindowController.sortByType(_:)),
              #selector(FileManagerWindowController.sortBySize(_:)),
@@ -774,6 +775,8 @@ enum FileManagerCommandValidator {
             menuItem.state = FileManagerViewPreferences.usesUTCTimestamps ? .on : .off
         case #selector(FileManagerWindowController.toggleAutoRefresh(_:)):
             menuItem.state = FileManagerViewPreferences.autoRefreshEnabled ? .on : .off
+        case #selector(FileManagerWindowController.toggleHiddenFiles(_:)):
+            menuItem.state = SZSettings.bool(.showHiddenFiles) ? .on : .off
         case #selector(FileManagerWindowController.toggleArchiveToolbar(_:)):
             menuItem.state = FileManagerToolbarPreferences.showsArchiveToolbar ? .on : .off
         case #selector(FileManagerWindowController.toggleStandardToolbar(_:)):

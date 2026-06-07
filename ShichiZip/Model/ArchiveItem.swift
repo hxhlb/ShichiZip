@@ -50,6 +50,11 @@ struct ArchiveItem {
         return String(name[name.index(after: dotIndex)...])
     }
 
+    var isHidden: Bool {
+        HiddenItemVisibility.isHidden(pathParts: pathParts,
+                                      attributes: attributes)
+    }
+
     /// Human-readable size string
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
@@ -246,5 +251,23 @@ struct ArchiveItem {
         self.position = position; self.block = block
         self.comment = comment
         self.propertyValues = propertyValues
+    }
+}
+
+enum HiddenItemVisibility {
+    static let hiddenAttributeMask: UInt32 = 0x2
+
+    static func isHidden(pathParts: [String],
+                         attributes: UInt32 = 0) -> Bool
+    {
+        if attributes & hiddenAttributeMask != 0 {
+            return true
+        }
+
+        return pathParts.contains { isHiddenName($0) }
+    }
+
+    static func isHiddenName(_ name: String) -> Bool {
+        name.hasPrefix(".") && name != "." && name != ".."
     }
 }

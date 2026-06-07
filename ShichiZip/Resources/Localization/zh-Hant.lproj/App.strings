@@ -224,6 +224,7 @@
 "app.shortcut.quickLook" = "快速查看";
 "app.shortcut.switchPanes" = "切換窗格";
 "app.shortcut.toggleDualPane" = "切換雙窗格";
+"app.shortcut.toggleHiddenFiles" = "切換隱藏檔顯示";
 
 "app.view.unifiedToolbarStyle" = "融合工具列樣式";
 
@@ -246,4 +247,5 @@
 
 "shell.openArchive" = "開啟壓縮檔…";
 
+"view.showHiddenFiles" = "顯示隱藏檔";
 "view.upOneLevel" = "前往上一層";

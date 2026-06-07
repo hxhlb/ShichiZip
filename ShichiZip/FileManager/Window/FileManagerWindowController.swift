@@ -425,6 +425,11 @@ class FileManagerWindowController: NSWindowController, NSWindowDelegate, NSUserI
         activePane.refresh()
     }
 
+    @objc func toggleHiddenFiles(_: Any?) {
+        SZSettings.set(!SZSettings.bool(.showHiddenFiles),
+                       for: .showHiddenFiles)
+    }
+
     @objc func closeDirectory(_: Any?) {
         activePane.closeDirectory()
     }
@@ -968,6 +973,8 @@ private extension FileManagerShortcutCommand {
             #selector(FileManagerWindowController.renameSelection(_:))
         case .switchPanes:
             #selector(FileManagerWindowController.switchPanes(_:))
+        case .toggleHiddenFiles:
+            #selector(FileManagerWindowController.toggleHiddenFiles(_:))
         case .copyFiles:
             #selector(FileManagerWindowController.copyFiles(_:))
         case .moveFiles:

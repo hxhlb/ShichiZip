@@ -291,7 +291,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
 
     @IBAction func showPreferences(_: Any?) {
         if settingsWindowController == nil {
-            settingsWindowController = SettingsWindowController()
+            let controller = SettingsWindowController()
+            controller.onWindowWillClose = { [weak self, weak controller] in
+                guard self?.settingsWindowController === controller else { return }
+                self?.settingsWindowController = nil
+            }
+            settingsWindowController = controller
         }
         settingsWindowController?.showWindow(self)
     }

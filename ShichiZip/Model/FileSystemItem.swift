@@ -7,6 +7,7 @@ final class FileSystemItem: Sendable {
         .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey,
         .contentModificationDateKey, .creationDateKey, .contentAccessDateKey,
         .attributeModificationDateKey, .fileAllocatedSizeKey, .totalFileAllocatedSizeKey,
+        .isHiddenKey,
     ]
 
     let url: URL
@@ -21,6 +22,7 @@ final class FileSystemItem: Sendable {
     let attributes: UInt32
     let inode: UInt64?
     let links: UInt64?
+    let isHidden: Bool
 
     convenience init(url: URL) {
         let values = try? url.resourceValues(forKeys: Set(Self.resourceKeys))
@@ -32,6 +34,7 @@ final class FileSystemItem: Sendable {
         self.url = url
         let status = Self.fileStatus(for: url)
         name = url.lastPathComponent
+        isHidden = resourceValues?.isHidden == true || HiddenItemVisibility.isHiddenName(name)
 
         let resolvedDirectoryValue: Bool?
         if resourceValues?.isSymbolicLink == true {
@@ -102,5 +105,6 @@ extension FileSystemItem: Equatable {
             && lhs.attributes == rhs.attributes
             && lhs.inode == rhs.inode
             && lhs.links == rhs.links
+            && lhs.isHidden == rhs.isHidden
     }
 }

@@ -224,6 +224,7 @@
 "app.shortcut.quickLook" = "Quick Look";
 "app.shortcut.switchPanes" = "Switch panes";
 "app.shortcut.toggleDualPane" = "Toggle dual pane";
+"app.shortcut.toggleHiddenFiles" = "Toggle hidden files";
 
 "app.view.unifiedToolbarStyle" = "Unified Style";
 
@@ -234,3 +235,5 @@
 "settings.current" = "Current folder";
 
 "shell.openArchive" = "Open Archive…";
+
+"view.showHiddenFiles" = "Show Hidden Files";

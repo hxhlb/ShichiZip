@@ -377,7 +377,7 @@ private final class IntegrationRowTableCellView: NSTableCellView {
     }
 }
 
-class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
+class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     private enum LayoutMetrics {
         static let outerInset: CGFloat = 12
         static let segmentSpacing: CGFloat = 12
@@ -398,6 +398,7 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
     private weak var integrationTableView: NSTableView?
     private var pendingFileAssociationUpdates: Set<String> = []
     private var isUpdatingShortcutControls = false
+    var onWindowWillClose: (() -> Void)?
 
     private static let supportedFileAssociations = IntegrationFileAssociation.integrationDocumentTypes()
     /// https://gist.github.com/rmcdongit/f66ff91e0dad78d4d6346a75ded4b751?permalink_comment_id=5507723#gistcomment-5507723
@@ -413,12 +414,17 @@ class SettingsWindowController: NSWindowController, NSTableViewDataSource, NSTab
         window.title = SZL10n.string("settings.options")
         window.center()
         self.init(window: window)
+        window.delegate = self
         setupUI()
     }
 
     override func showWindow(_ sender: Any?) {
         window?.title = SZL10n.string("settings.options")
         super.showWindow(sender)
+    }
+
+    func windowWillClose(_: Notification) {
+        onWindowWillClose?()
     }
 
     private func setupUI() {

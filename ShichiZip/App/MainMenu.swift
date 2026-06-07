@@ -228,6 +228,7 @@ enum FileManagerShortcutCommand: String, CaseIterable {
     case goUpOneLevel
     case renameSelection
     case switchPanes
+    case toggleHiddenFiles
     case copyFiles
     case moveFiles
     case createFolder
@@ -247,6 +248,8 @@ enum FileManagerShortcutCommand: String, CaseIterable {
             SZL10n.string("menu.rename")
         case .switchPanes:
             SZL10n.string("app.shortcut.switchPanes")
+        case .toggleHiddenFiles:
+            SZL10n.string("app.shortcut.toggleHiddenFiles")
         case .copyFiles:
             SZL10n.string("menu.copyTo")
         case .moveFiles:
@@ -341,6 +344,9 @@ enum FileManagerShortcuts {
                                                       keyEquivalent: "\r"),
                 .switchPanes: FileManagerShortcut(keyCode: 48,
                                                   keyEquivalent: "\t"),
+                .toggleHiddenFiles: FileManagerShortcut(keyCode: 47,
+                                                        modifiers: [.command, .shift],
+                                                        keyEquivalent: "."),
                 .createFolder: FileManagerShortcut(keyCode: 45,
                                                    modifiers: [.command, .shift],
                                                    keyEquivalent: "n"),
@@ -373,9 +379,6 @@ enum FileManagerShortcuts {
                                                   keyEquivalent: String(UnicodeScalar(Int(NSF1FunctionKey) + 7)!)),
                 .toggleDualPane: FileManagerShortcut(keyCode: 101,
                                                      keyEquivalent: String(UnicodeScalar(Int(NSF1FunctionKey) + 8)!)),
-                .refreshActivePane: FileManagerShortcut(keyCode: 15,
-                                                        modifiers: [.command],
-                                                        keyEquivalent: "r"),
             ]
         case .custom:
             [:]
@@ -866,6 +869,12 @@ enum MainMenu {
                 action: #selector(FileManagerWindowController.sortBySize(_:)))
         viewMenu.addItem(.separator())
         addItem(to: viewMenu,
+                title: SZL10n.string("view.showHiddenFiles"),
+                action: #selector(FileManagerWindowController.toggleHiddenFiles(_:)),
+                keyEquivalent: FileManagerShortcuts.menuShortcut(for: .toggleHiddenFiles)?.keyEquivalent ?? "",
+                modifiers: FileManagerShortcuts.menuShortcut(for: .toggleHiddenFiles)?.modifiers ?? [])
+        viewMenu.addItem(.separator())
+        addItem(to: viewMenu,
                 title: SZL10n.string("view.twoPanels"),
                 action: #selector(FileManagerWindowController.toggleDualPane(_:)),
                 keyEquivalent: FileManagerShortcuts.menuShortcut(for: .toggleDualPane)?.keyEquivalent ?? "",
@@ -914,8 +923,8 @@ enum MainMenu {
         addItem(to: viewMenu,
                 title: SZL10n.string("view.refresh"),
                 action: #selector(FileManagerWindowController.refreshActivePane(_:)),
-                keyEquivalent: FileManagerShortcuts.menuShortcut(for: .refreshActivePane)?.keyEquivalent ?? "r",
-                modifiers: FileManagerShortcuts.menuShortcut(for: .refreshActivePane)?.modifiers ?? [.command])
+                keyEquivalent: FileManagerShortcuts.menuShortcut(for: .refreshActivePane)?.keyEquivalent ?? "",
+                modifiers: FileManagerShortcuts.menuShortcut(for: .refreshActivePane)?.modifiers ?? [])
         addItem(to: viewMenu,
                 title: SZL10n.string("view.autoRefresh"),
                 action: #selector(FileManagerWindowController.toggleAutoRefresh(_:)))

@@ -21,6 +21,10 @@ final class ArchivePreviewPresentationTests: XCTestCase {
         XCTAssertEqual(ArchivePreviewPresentation.filteredItems(allItems,
                                                                 showHiddenItems: true).map(\.path),
                        allItems.map(\.path))
+        XCTAssertFalse(visible.isHidden)
+        XCTAssertTrue(dotFile.isHidden)
+        XCTAssertTrue(dotDirectoryChild.isHidden)
+        XCTAssertTrue(hiddenAttribute.isHidden)
     }
 
     func testSummaryMatchesMainFileManagerStatusFormat() {

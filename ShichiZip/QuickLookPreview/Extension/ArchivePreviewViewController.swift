@@ -253,11 +253,14 @@ private final class ArchivePreviewTextCellView: NSTableCellView {
 
     func configure(text: String,
                    alignment: NSTextAlignment,
-                   font: NSFont)
+                   font: NSFont,
+                   isHidden: Bool)
     {
         label.stringValue = text
         label.alignment = alignment
         label.font = font
+        label.textColor = isHidden ? .secondaryLabelColor : .labelColor
+        label.alphaValue = isHidden ? 0.7 : 1.0
     }
 
     private func configureSubviews() {
@@ -294,12 +297,16 @@ private final class ArchivePreviewNameCellView: NSTableCellView {
     func configure(text: String,
                    icon: NSImage,
                    alignment: NSTextAlignment,
-                   font: NSFont)
+                   font: NSFont,
+                   isHidden: Bool)
     {
         label.stringValue = text
         label.alignment = alignment
         label.font = font
+        label.textColor = isHidden ? .secondaryLabelColor : .labelColor
+        label.alphaValue = isHidden ? 0.7 : 1.0
         iconImageView.image = icon
+        iconImageView.alphaValue = isHidden ? 0.5 : 1.0
     }
 
     private func configureSubviews() {
@@ -380,7 +387,8 @@ extension ArchivePreviewViewController: NSOutlineViewDataSource, NSOutlineViewDe
             cell.configure(text: node.text(for: column.id),
                            icon: icon(for: previewRow),
                            alignment: alignment,
-                           font: font)
+                           font: font,
+                           isHidden: previewRow.isHidden)
             return cell
         }
 
@@ -389,7 +397,8 @@ extension ArchivePreviewViewController: NSOutlineViewDataSource, NSOutlineViewDe
             ?? ArchivePreviewTextCellView()
         cell.configure(text: node.text(for: column.id),
                        alignment: alignment,
-                       font: font)
+                       font: font,
+                       isHidden: previewRow.isHidden)
         return cell
     }
 

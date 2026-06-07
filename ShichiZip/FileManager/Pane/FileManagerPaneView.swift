@@ -135,6 +135,7 @@ private struct FileManagerPaneTableCellConfiguration {
     let text: String
     let isDirectory: Bool
     let iconPath: String
+    let isHidden: Bool
 
     init(item: FileManagerPaneItem,
          columnID: FileManagerColumnID,
@@ -145,18 +146,21 @@ private struct FileManagerPaneTableCellConfiguration {
             text = FileManagerItemPresentation.parentRowListCellText(for: columnID)
             isDirectory = true
             iconPath = ""
+            isHidden = false
         case let .archive(archiveItem):
             text = FileManagerItemPresentation.listCellText(for: archiveItem,
                                                             columnID: columnID,
                                                             dateFormatter: dateFormatter)
             isDirectory = archiveItem.isDirectory
             iconPath = archiveItem.name
+            isHidden = archiveItem.isHidden
         case let .filesystem(fileSystemItem):
             text = FileManagerItemPresentation.listCellText(for: fileSystemItem,
                                                             columnID: columnID,
                                                             dateFormatter: dateFormatter)
             isDirectory = fileSystemItem.isDirectory
             iconPath = fileSystemItem.url.path
+            isHidden = fileSystemItem.isHidden
         }
     }
 }
@@ -193,6 +197,8 @@ enum FileManagerPaneTableCellRenderer {
         cell.textField?.font = column.font
         cell.textField?.lineBreakMode = columnID == .name ? .byTruncatingMiddle : .byTruncatingTail
         cell.textField?.stringValue = column.normalizedDisplayString(configuration.text)
+        cell.textField?.textColor = configuration.isHidden ? .secondaryLabelColor : .labelColor
+        cell.textField?.alphaValue = configuration.isHidden ? 0.7 : 1.0
 
         if columnID == .name {
             configureIcon(cell.imageView,
@@ -262,6 +268,7 @@ enum FileManagerPaneTableCellRenderer {
         imageView?.image = iconImageProvider(item,
                                              configuration.isDirectory,
                                              configuration.iconPath)
+        imageView?.alphaValue = configuration.isHidden ? 0.5 : 1.0
         switch item {
         case .parent:
             imageView?.contentTintColor = .secondaryLabelColor
