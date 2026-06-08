@@ -203,6 +203,8 @@
 "app.settings.quickActionsNote" = "Finder 快速動作的啟用狀態由 macOS 在「系統設定」中管理。";
 "app.settings.quickActionsOpenError" = "無法開啟 Finder 快速動作設定。";
 "app.settings.quickActionsOpenErrorDetail" = "開啟「系統設定」，前往「延伸功能」→「Finder」來管理 %@ 的快速動作。";
+"app.settings.quickLookExpansionDepth" = "預設展開壓縮檔預覽資料夾：";
+"app.settings.quickLookExpansionDepthLevels" = "層";
 "app.settings.quitOnLastClose" = "關閉最後一個視窗時結束 App";
 "app.settings.recordShortcut" = "錄製快速鍵";
 "app.settings.rememberFileManagerWindowFrame" = "記住檔案管理器視窗大小與位置";

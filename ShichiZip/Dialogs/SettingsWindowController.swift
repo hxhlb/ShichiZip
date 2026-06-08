@@ -377,7 +377,7 @@ private final class IntegrationRowTableCellView: NSTableCellView {
     }
 }
 
-class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
+class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     private enum LayoutMetrics {
         static let outerInset: CGFloat = 12
         static let segmentSpacing: CGFloat = 12
@@ -386,6 +386,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableVie
         static let integrationArchiveTypeWidth: CGFloat = 200
         static let integrationDefaultApplicationWidth: CGFloat = 120
         static let integrationActionButtonWidth: CGFloat = 124
+        static let quickLookExpansionDepthIdentifier = "settings.quickLook.expansionDepth"
     }
 
     private var tabView: NSTabView!
@@ -936,6 +937,8 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableVie
         noteLabel.preferredMaxLayoutWidth = LayoutMetrics.integrationContentWidth
         stack.addArrangedSubview(noteLabel)
 
+        addQuickLookSection(to: stack)
+
         refreshIntegrationFileAssociationRows()
 
         return makePageView(containing: stack)
@@ -1153,6 +1156,14 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableVie
     private var launchOpenDelaySlider: NSSlider?
     private var launchOpenDelayField: NSTextField?
 
+    private static let quickLookExpansionDepthFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.allowsFloats = false
+        formatter.minimum = 0
+        formatter.maximum = NSNumber(value: ArchivePreviewPreferences.maximumExpansionDepth)
+        return formatter
+    }()
+
     private func addLaunchOpenSection(to stack: NSStackView) {
         launchOpenExtractControls.removeAll()
         launchOpenExtractLabels.removeAll()
@@ -1260,6 +1271,37 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableVie
         launchOpenExtractControls.append(modifierPopup)
 
         updateLaunchOpenExtractControlsEnabled()
+    }
+
+    private func addQuickLookSection(to stack: NSStackView) {
+        let separator = makeSettingsSeparator()
+        stack.addArrangedSubview(separator)
+        separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        stack.addArrangedSubview(makeSectionLabel("Quick Look"))
+
+        let depthLabel = NSTextField(labelWithString: SZL10n.string("app.settings.quickLookExpansionDepth"))
+        let depthField = NSTextField()
+        depthField.alignment = .right
+        depthField.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize,
+                                                     weight: .regular)
+        depthField.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        depthField.formatter = Self.quickLookExpansionDepthFormatter
+        depthField.integerValue = SZSettings.quickLookPreviewExpansionDepth
+        depthField.target = self
+        depthField.action = #selector(quickLookExpansionDepthChanged(_:))
+        depthField.delegate = self
+        depthField.identifier = NSUserInterfaceItemIdentifier(LayoutMetrics.quickLookExpansionDepthIdentifier)
+        depthField.setAccessibilityIdentifier(LayoutMetrics.quickLookExpansionDepthIdentifier)
+
+        let levelsLabel = NSTextField(labelWithString: SZL10n.string("app.settings.quickLookExpansionDepthLevels"))
+        levelsLabel.textColor = .secondaryLabelColor
+
+        let depthRow = NSStackView(views: [depthLabel, depthField, levelsLabel])
+        depthRow.orientation = .horizontal
+        depthRow.alignment = .centerY
+        depthRow.spacing = 8
+        stack.addArrangedSubview(depthRow)
     }
 
     private func indentedRow(_ view: NSView) -> NSView {
@@ -1392,6 +1434,50 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableVie
               let modifier = LaunchOpenBrowseModifier(rawValue: rawValue)
         else { return }
         SZSettings.launchOpenBrowseModifier = modifier
+    }
+
+    @objc private func quickLookExpansionDepthChanged(_ sender: NSTextField) {
+        let depth = persistQuickLookExpansionDepth(from: sender)
+        sender.integerValue = depth
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let textField = notification.object as? NSTextField,
+              textField.identifier?.rawValue == LayoutMetrics.quickLookExpansionDepthIdentifier
+        else {
+            return
+        }
+
+        persistValidQuickLookExpansionDepth(from: textField)
+    }
+
+    func controlTextDidEndEditing(_ notification: Notification) {
+        guard let textField = notification.object as? NSTextField,
+              textField.identifier?.rawValue == LayoutMetrics.quickLookExpansionDepthIdentifier
+        else {
+            return
+        }
+
+        let depth = persistQuickLookExpansionDepth(from: textField)
+        textField.integerValue = depth
+    }
+
+    @discardableResult
+    private func persistQuickLookExpansionDepth(from textField: NSTextField) -> Int {
+        let depth = ArchivePreviewPreferences.normalizedExpansionDepth(textField.integerValue)
+        SZSettings.quickLookPreviewExpansionDepth = depth
+        return depth
+    }
+
+    private func persistValidQuickLookExpansionDepth(from textField: NSTextField) {
+        let trimmedValue = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let depth = Int(trimmedValue),
+              (0 ... ArchivePreviewPreferences.maximumExpansionDepth).contains(depth)
+        else {
+            return
+        }
+
+        SZSettings.quickLookPreviewExpansionDepth = depth
     }
 
     @objc private func shortcutPresetChanged(_ sender: NSPopUpButton) {

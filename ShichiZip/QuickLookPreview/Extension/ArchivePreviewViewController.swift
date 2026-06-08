@@ -18,6 +18,7 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
     private var visibleColumns: [ArchivePreviewColumn] = []
     private var iconCache: [ArchivePreviewIconKey: NSImage] = [:]
     private var expandedNodePaths = Set<String>()
+    private var hasRecordedExpansionState = false
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 860, height: 520))
@@ -53,6 +54,7 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
 
     @objc private func hiddenItemsChanged(_: Any?) {
         recordVisibleExpansionState()
+        hasRecordedExpansionState = true
         reloadTable()
     }
 
@@ -129,6 +131,7 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
         hiddenItemsButton.isEnabled = false
         rootNodes = []
         expandedNodePaths.removeAll()
+        hasRecordedExpansionState = false
         resetColumns()
         tableView.reloadData()
     }
@@ -222,8 +225,12 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
     }
 
     private func restoreExpansionState() {
-        guard !expandedNodePaths.isEmpty else { return }
-        restoreExpansionState(for: rootNodes)
+        if hasRecordedExpansionState {
+            restoreExpansionState(for: rootNodes)
+            return
+        }
+
+        expandDefaultItems()
     }
 
     private func restoreExpansionState(for nodes: [ArchivePreviewTreeNode]) {
@@ -231,6 +238,25 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
             guard expandedNodePaths.contains(node.row.path) else { continue }
             tableView.expandItem(node)
             restoreExpansionState(for: node.children)
+        }
+    }
+
+    private func expandDefaultItems() {
+        let depth = ArchivePreviewPreferences.expansionDepth()
+        guard depth > 0 else { return }
+        expandDefaultItems(for: rootNodes,
+                           remainingDepth: depth)
+    }
+
+    private func expandDefaultItems(for nodes: [ArchivePreviewTreeNode],
+                                    remainingDepth: Int)
+    {
+        guard remainingDepth > 0 else { return }
+
+        for node in nodes where !node.children.isEmpty {
+            tableView.expandItem(node)
+            expandDefaultItems(for: node.children,
+                               remainingDepth: remainingDepth - 1)
         }
     }
 }

@@ -203,6 +203,8 @@
 "app.settings.quickActionsNote" = "Finder Quick Action enablement is managed by macOS in System Settings.";
 "app.settings.quickActionsOpenError" = "Unable to open Finder Quick Actions settings.";
 "app.settings.quickActionsOpenErrorDetail" = "Open System Settings and go to Extensions > Finder to manage %@'s Quick Actions.";
+"app.settings.quickLookExpansionDepth" = "Expand archive preview folders by default:";
+"app.settings.quickLookExpansionDepthLevels" = "levels";
 "app.settings.quitOnLastClose" = "Quit the app when the last window closes";
 "app.settings.recordShortcut" = "Record Shortcut";
 "app.settings.rememberFileManagerWindowFrame" = "Remember File Manager window size and position";

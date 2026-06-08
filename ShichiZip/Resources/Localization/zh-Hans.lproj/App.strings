@@ -203,6 +203,8 @@
 "app.settings.quickActionsNote" = "访达快速操作的启用状态由 macOS 在系统设置中管理。";
 "app.settings.quickActionsOpenError" = "无法打开访达快速操作设置。";
 "app.settings.quickActionsOpenErrorDetail" = "请打开系统设置，前往「扩展 > 访达」管理 %@ 的快速操作。";
+"app.settings.quickLookExpansionDepth" = "默认展开压缩包预览文件夹：";
+"app.settings.quickLookExpansionDepthLevels" = "层";
 "app.settings.quitOnLastClose" = "关闭最后一个窗口时退出应用";
 "app.settings.recordShortcut" = "录制快捷键";
 "app.settings.rememberFileManagerWindowFrame" = "记住文件管理器窗口大小和位置";
