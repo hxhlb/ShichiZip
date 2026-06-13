@@ -156,7 +156,6 @@
 "app.progress.working" = "Working…";
 
 "app.quickLook.archivePreview.empty" = "No archive contents";
-"app.quickLook.archivePreview.loading" = "Loading archive contents…";
 "app.quickLook.archivePreview.readError" = "The archive could not be read.";
 "app.quickLook.archivePreview.readErrorFormat" = "The archive could not be read: %@";
 "app.quickLook.archivePreview.showHiddenItems" = "Show hidden items";

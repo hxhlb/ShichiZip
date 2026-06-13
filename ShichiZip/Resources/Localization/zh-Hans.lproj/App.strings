@@ -156,7 +156,6 @@
 "app.progress.working" = "正在处理…";
 
 "app.quickLook.archivePreview.empty" = "没有压缩包内容";
-"app.quickLook.archivePreview.loading" = "正在加载压缩包内容…";
 "app.quickLook.archivePreview.readError" = "无法读取压缩包。";
 "app.quickLook.archivePreview.readErrorFormat" = "无法读取压缩包：%@";
 "app.quickLook.archivePreview.showHiddenItems" = "显示隐藏项目";

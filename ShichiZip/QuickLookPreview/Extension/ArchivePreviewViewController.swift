@@ -26,30 +26,43 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
         configureHeader()
         configureTable()
         configureLayout()
-        showLoadingState()
     }
 
     func preparePreviewOfFile(at url: URL,
                               completionHandler handler: @escaping (Error?) -> Void)
     {
-        showLoadingState()
-
-        do {
-            let loadedSnapshot = try ArchivePreviewLoader.loadArchiveContents(at: url)
-            snapshot = loadedSnapshot
-            configureColumns(for: loadedSnapshot)
-            hiddenItemsButton.isEnabled = true
-            statusLabel.stringValue = ""
-            reloadTable()
-            handler(nil)
-        } catch {
-            snapshot = nil
-            rootNodes = []
-            tableView.reloadData()
-            hiddenItemsButton.isEnabled = false
-            showErrorState(error)
+        Task {
+            do {
+                try await applyPreview(Self.loadSnapshot(at: url))
+            } catch {
+                applyPreviewFailure(error)
+            }
             handler(nil)
         }
+    }
+
+    private static func loadSnapshot(at url: URL) async throws -> ArchivePreviewSnapshot {
+        try await Task.detached(priority: .userInitiated) {
+            try ArchivePreviewLoader.loadArchiveContents(at: url)
+        }.value
+    }
+
+    private func applyPreview(_ loadedSnapshot: ArchivePreviewSnapshot) {
+        snapshot = loadedSnapshot
+        expandedNodePaths.removeAll()
+        hasRecordedExpansionState = false
+        configureColumns(for: loadedSnapshot)
+        hiddenItemsButton.isEnabled = true
+        statusLabel.stringValue = ""
+        reloadTable()
+    }
+
+    private func applyPreviewFailure(_ error: Error) {
+        snapshot = nil
+        rootNodes = []
+        tableView.reloadData()
+        hiddenItemsButton.isEnabled = false
+        showErrorState(error)
     }
 
     @objc private func hiddenItemsChanged(_: Any?) {
@@ -123,17 +136,6 @@ final class ArchivePreviewViewController: NSViewController, @MainActor QLPreview
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-    }
-
-    private func showLoadingState() {
-        summaryLabel.stringValue = ArchivePreviewLocalization.string("app.quickLook.archivePreview.loading")
-        statusLabel.stringValue = ""
-        hiddenItemsButton.isEnabled = false
-        rootNodes = []
-        expandedNodePaths.removeAll()
-        hasRecordedExpansionState = false
-        resetColumns()
-        tableView.reloadData()
     }
 
     private func showErrorState(_ error: Error) {

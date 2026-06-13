@@ -156,7 +156,6 @@
 "app.progress.working" = "正在處理…";
 
 "app.quickLook.archivePreview.empty" = "沒有壓縮檔內容";
-"app.quickLook.archivePreview.loading" = "正在載入壓縮檔內容…";
 "app.quickLook.archivePreview.readError" = "無法讀取壓縮檔。";
 "app.quickLook.archivePreview.readErrorFormat" = "無法讀取壓縮檔：%@";
 "app.quickLook.archivePreview.showHiddenItems" = "顯示隱藏項目";
