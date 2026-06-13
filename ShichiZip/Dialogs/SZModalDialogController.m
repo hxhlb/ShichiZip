@@ -28,6 +28,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
                  buttonTitles:(NSArray<NSString*>*)buttonTitles
                 accessoryView:(nullable NSView*)accessoryView
       preferredFirstResponder:(nullable NSView*)preferredFirstResponder
+            cancelButtonIndex:(NSInteger)cancelButtonIndex
                        target:(id)target
                        action:(SEL)action;
 
@@ -56,6 +57,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
     NSArray<NSButton*>* _dialogButtons;
     __weak id _target;
     SEL _action;
+    NSInteger _cancelButtonIndex;
 }
 
 - (CGFloat)minimumContentWidth {
@@ -96,6 +98,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
                  buttonTitles:(NSArray<NSString*>*)buttonTitles
                 accessoryView:(NSView*)accessoryView
       preferredFirstResponder:(NSView*)preferredFirstResponder
+            cancelButtonIndex:(NSInteger)cancelButtonIndex
                        target:(id)target
                        action:(SEL)action {
     if ((self = [super initWithNibName:nil bundle:nil])) {
@@ -105,6 +108,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
         _buttonTitles = [buttonTitles copy];
         _accessoryView = accessoryView;
         _preferredFirstResponderView = preferredFirstResponder;
+        _cancelButtonIndex = cancelButtonIndex;
         _target = target;
         _action = action;
     }
@@ -227,7 +231,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
         if (index == (NSInteger)_buttonTitles.count - 1) {
             button.keyEquivalent = @"\r";
         }
-        if ([title caseInsensitiveCompare:@"Cancel"] == NSOrderedSame) {
+        if (index == _cancelButtonIndex) {
             button.keyEquivalent = @"\e";
         }
         [buttonStack addArrangedSubview:button];
@@ -321,6 +325,7 @@ static NSString* SZModalDialogAppDisplayName(void) {
                                                                           buttonTitles:buttonTitles
                                                                          accessoryView:accessoryView
                                                                preferredFirstResponder:preferredFirstResponder
+                                                                     cancelButtonIndex:cancelButtonIndex
                                                                                 target:self
                                                                                 action:@selector(buttonClicked:)];
         window.contentViewController = _contentController;
