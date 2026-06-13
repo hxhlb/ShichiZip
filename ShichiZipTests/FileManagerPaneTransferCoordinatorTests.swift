@@ -76,6 +76,11 @@ private final class TransferHostProbe: FileManagerPaneTransferHost {
         return nil
     }
 
+    func transferLeasedArchiveMutationTarget(for _: SZArchive, subdir: String) -> FileManagerLeasedArchiveMutationTarget? {
+        requestedSubdir = subdir
+        return nil
+    }
+
     func transferDidMutateArchive(targetSubdir _: String?, selectingPaths _: [String]) {}
 
     func transferShowReadOnlyArchiveMutationAlert(action: String) {

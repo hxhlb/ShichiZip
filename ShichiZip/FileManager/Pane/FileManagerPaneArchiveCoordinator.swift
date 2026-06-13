@@ -187,10 +187,10 @@ final class FileManagerPaneArchiveCoordinator {
         return (target.archive, target.subdir)
     }
 
-    func revalidatedMutationTarget(for target: (archive: SZArchive, subdir: String)) -> (archive: SZArchive, subdir: String)? {
-        guard let archiveURL = archiveSession.archiveURL(for: target.archive) else { return nil }
-        return mutationTarget(for: archiveURL,
-                              subdir: target.subdir)
+    func revalidatedMutationTarget(for target: (archive: SZArchive, subdir: String)) -> FileManagerLeasedArchiveMutationTarget? {
+        archiveSession.leasedMutationTarget(for: target.archive,
+                                            subdir: target.subdir,
+                                            hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance)
     }
 
     func currentDestinationDisplayPath(locationDisplayPath: String) -> String? {

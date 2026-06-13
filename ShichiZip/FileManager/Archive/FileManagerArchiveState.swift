@@ -282,6 +282,29 @@ final class FileManagerArchiveSession {
                              hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance)
     }
 
+    /// Resolves the in-place mutation target for `archive` (revalidating that it is still the
+    /// current level) and acquires an operation-gate lease for the impending write. Returns `nil`
+    /// if the archive is gone, no longer current, not mutable, or already closing — keeping
+    /// add/delete/rename/createFolder symmetric with extraction's `currentItemWorkflowContext`.
+    func leasedMutationTarget(for archive: SZArchive,
+                              subdir: String,
+                              hasConflictingNestedArchiveInstance: (FileManagerNestedArchiveIdentity) -> Bool) -> FileManagerLeasedArchiveMutationTarget?
+    {
+        guard let archiveURL = archiveURL(for: archive),
+              let level = currentLevel,
+              URL(fileURLWithPath: level.archivePath).standardizedFileURL == archiveURL.standardizedFileURL,
+              let target = level.mutationTarget(subdir: subdir,
+                                                hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance),
+              let lease = level.operationGate.acquireLease()
+        else {
+            return nil
+        }
+
+        return FileManagerLeasedArchiveMutationTarget(archive: target.archive,
+                                                      subdir: target.subdir,
+                                                      lease: lease)
+    }
+
     func archiveURL(for archive: SZArchive) -> URL? {
         stack.archiveURL(for: archive)
     }

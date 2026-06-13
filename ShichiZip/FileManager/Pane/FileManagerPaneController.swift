@@ -493,7 +493,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         archiveCoordinator.currentMutationTarget()
     }
 
-    func revalidatedArchiveMutationTarget(for target: (archive: SZArchive, subdir: String)) -> (archive: SZArchive, subdir: String)? {
+    func revalidatedArchiveMutationTarget(for target: (archive: SZArchive, subdir: String)) -> FileManagerLeasedArchiveMutationTarget? {
         archiveCoordinator.revalidatedMutationTarget(for: target)
     }
 
@@ -1343,6 +1343,10 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     func transferArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerPaneArchiveTransferTarget? {
         transferArchiveTarget(for: archive,
                               subdir: subdir)
+    }
+
+    func transferLeasedArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerLeasedArchiveMutationTarget? {
+        archiveCoordinator.revalidatedMutationTarget(for: (archive, subdir))
     }
 
     func transferRefresh() {

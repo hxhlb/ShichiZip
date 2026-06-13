@@ -158,11 +158,6 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
         XCTAssertTrue(nestedTarget.archive === prepared.archive)
         XCTAssertEqual(nestedTarget.subdir, "folder")
 
-        let revalidatedTarget = try XCTUnwrap(coordinator.revalidatedMutationTarget(for: (archive: prepared.archive,
-                                                                                          subdir: "folder")))
-        XCTAssertTrue(revalidatedTarget.archive === prepared.archive)
-        XCTAssertEqual(revalidatedTarget.subdir, "folder")
-
         let transferTarget = try XCTUnwrap(coordinator.transferTarget(for: prepared.archive,
                                                                       subdir: "folder"))
         XCTAssertTrue(transferTarget.archive === prepared.archive)
@@ -172,6 +167,18 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
         let otherArchiveURL = archiveURL.deletingLastPathComponent().appendingPathComponent("other.7z")
         XCTAssertNil(coordinator.mutationTarget(for: otherArchiveURL,
                                                 subdir: "folder"))
+
+        // Revalidating a write target leases the operation gate so close() waits for the in-flight
+        // mutation. While the lease is held, no concurrent in-place target may resolve.
+        let revalidatedTarget = try XCTUnwrap(coordinator.revalidatedMutationTarget(for: (archive: prepared.archive,
+                                                                                          subdir: "folder")))
+        XCTAssertTrue(revalidatedTarget.archive === prepared.archive)
+        XCTAssertEqual(revalidatedTarget.subdir, "folder")
+        XCTAssertNil(coordinator.currentMutationTarget(),
+                     "An active mutation lease must block concurrent in-place mutation targets")
+        XCTAssertNil(coordinator.revalidatedMutationTarget(for: (archive: prepared.archive,
+                                                                 subdir: "folder")),
+                     "A second concurrent leased mutation target must not be granted")
     }
 
     func testCurrentItemWorkflowContextUsesCurrentArchiveDisplayAndQuarantineSource() throws {

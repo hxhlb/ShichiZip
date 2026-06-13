@@ -616,6 +616,7 @@ protocol FileManagerPaneTransferHost: FileManagerPaneTransferSourceHost {
     func transferArchiveDragContext(acquireLease: Bool) -> FileManagerPaneArchiveDragContext?
     func transferCurrentArchiveMutationTarget() -> FileManagerPaneArchiveTransferTarget?
     func transferArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerPaneArchiveTransferTarget?
+    func transferLeasedArchiveMutationTarget(for archive: SZArchive, subdir: String) -> FileManagerLeasedArchiveMutationTarget?
     func transferDidMutateArchive(targetSubdir: String?, selectingPaths paths: [String])
     func transferShowReadOnlyArchiveMutationAlert(action: String)
     func transferShowError(_ error: Error)
@@ -1012,11 +1013,10 @@ final class FileManagerPaneTransferCoordinator {
     }
 
     private static func revalidatedArchiveMutationTarget(for target: FileManagerPaneArchiveTransferTarget,
-                                                         host: any FileManagerPaneTransferHost) -> (archive: SZArchive, subdir: String)?
+                                                         host: any FileManagerPaneTransferHost) -> FileManagerLeasedArchiveMutationTarget?
     {
-        host.transferArchiveMutationTarget(for: target.archive,
-                                           subdir: target.subdir)
-            .map { ($0.archive, $0.subdir) }
+        host.transferLeasedArchiveMutationTarget(for: target.archive,
+                                                 subdir: target.subdir)
     }
 
     private func sourceHost(for info: any NSDraggingInfo) -> (any FileManagerPaneTransferSourceHost)? {

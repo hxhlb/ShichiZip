@@ -30,6 +30,16 @@ struct FileManagerArchiveMutationTarget {
     let topLevelArchiveURL: URL?
 }
 
+/// A mutation target paired with an operation-gate lease held for the lifetime of an in-place
+/// archive write, so a concurrent `closeLevel` drains before `archive.close()` tears down the
+/// shared `SZArchive`. Mirrors the lease carried by `FileManagerArchiveItemWorkflowContext` for
+/// extraction.
+struct FileManagerLeasedArchiveMutationTarget {
+    let archive: SZArchive
+    let subdir: String
+    let lease: FileManagerArchiveOperationGate.Lease
+}
+
 struct FileManagerArchiveFileFingerprint: Equatable {
     let fileSize: UInt64
     let modificationDate: Date
