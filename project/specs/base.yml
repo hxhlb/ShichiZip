@@ -15,6 +15,9 @@ settings:
     MARKETING_VERSION: "0.2.5"
     CURRENT_PROJECT_VERSION: "1" # placeholder, will be overridden by build script
     SWIFT_VERSION: "6.0"
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: true
+    GCC_TREAT_WARNINGS_AS_ERRORS: true
+    RUN_CLANG_STATIC_ANALYZER: true
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS:
