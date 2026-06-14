@@ -1251,8 +1251,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         try archiveCoordinator.testCurrentArchive(session: session)
     }
 
-    /// Returns the archive handle for the currently open archive, for use off the main actor.
-    func currentArchiveForTest() throws -> SZArchive {
+    /// Returns the current archive paired with an operation-gate lease, for use off the main actor.
+    func currentArchiveForTest() throws -> FileManagerLeasedArchive {
         try archiveCoordinator.currentArchiveForTest()
     }
 

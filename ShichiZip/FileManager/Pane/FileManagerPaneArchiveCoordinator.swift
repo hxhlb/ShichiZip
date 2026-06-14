@@ -286,7 +286,7 @@ final class FileManagerPaneArchiveCoordinator {
             throw operationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
         }
 
-        guard let preparedExtraction = FileManagerArchiveExtraction.prepare(items: itemsToExtract,
+        guard var preparedExtraction = FileManagerArchiveExtraction.prepare(items: itemsToExtract,
                                                                             context: context,
                                                                             destinationURL: destinationURL,
                                                                             overwriteMode: overwriteMode,
@@ -299,6 +299,9 @@ final class FileManagerPaneArchiveCoordinator {
             throw operationError(SZL10n.string("app.fileManager.error.cannotExtractSelected"))
         }
 
+        // Lease the gate so `closeLevel`'s drain waits for a background extraction instead of letting
+        // `close()` hard-block the main thread. Best-effort: `nil` when already closing.
+        preparedExtraction.archiveOperationLease = archiveSession.currentLevel?.operationGate.acquireLease()
         return preparedExtraction
     }
 
@@ -334,11 +337,14 @@ final class FileManagerPaneArchiveCoordinator {
         try level.archive.test(with: session)
     }
 
-    func currentArchiveForTest() throws -> SZArchive {
+    func currentArchiveForTest() throws -> FileManagerLeasedArchive {
         guard let level = archiveSession.currentLevel else {
             throw operationError(SZL10n.string("app.fileManager.error.noArchiveOpen"))
         }
-        return level.archive
+        // Lease the gate so `closeLevel`'s drain waits for a background test instead of hard-blocking
+        // the main thread. Best-effort: `nil` when already closing.
+        return FileManagerLeasedArchive(archive: level.archive,
+                                        lease: level.operationGate.acquireLease())
     }
 
     private func currentDisplayPathPrefix() -> String {

@@ -40,6 +40,14 @@ struct FileManagerLeasedArchiveMutationTarget {
     let lease: FileManagerArchiveOperationGate.Lease
 }
 
+/// Pairs the current archive with an operation-gate lease so a background read keeps the gate busy,
+/// letting `closeLevel`'s drain wait for it instead of hard-blocking on `close()`. The lease is
+/// optional so the read still proceeds when the archive is already closing.
+struct FileManagerLeasedArchive {
+    let archive: SZArchive
+    let lease: FileManagerArchiveOperationGate.Lease?
+}
+
 struct FileManagerArchiveFileFingerprint: Equatable {
     let fileSize: UInt64
     let modificationDate: Date

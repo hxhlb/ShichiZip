@@ -265,6 +265,10 @@ struct FileManagerPreparedExtraction: @unchecked Sendable {
     let destinationURL: URL
     let settings: SZExtractionSettings
     let materializeNewDestination: Bool
+    /// Operation-gate lease held for the extraction's lifetime so `closeLevel`'s drain waits for the
+    /// in-flight read instead of hard-blocking on `close()`. Travels by value into the run closure and
+    /// releases when the work finishes.
+    var archiveOperationLease: FileManagerArchiveOperationGate.Lease?
 
     nonisolated func perform(session: SZOperationSession?) throws {
         if materializeNewDestination,

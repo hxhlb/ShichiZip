@@ -241,6 +241,53 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
         }
     }
 
+    func testPrepareExtractionLeasesOperationGateSoCloseWaits() throws {
+        let session = FileManagerArchiveSession()
+        let item = makeArchiveItem(index: 3,
+                                   path: "folder/file.txt")
+        let prepared = try makePreparedArchive(named: "extract-lease",
+                                               entries: [item])
+        session.appendPreparedArchive(prepared)
+        let coordinator = makeCoordinator(session: session)
+
+        let extraction = try coordinator.prepareExtraction(of: [item],
+                                                           emptySelectionMessage: "Select something",
+                                                           to: URL(fileURLWithPath: "/tmp/out", isDirectory: true),
+                                                           overwriteMode: .ask,
+                                                           pathMode: .currentPaths,
+                                                           password: nil,
+                                                           preserveNtSecurityInfo: false,
+                                                           eliminateDuplicates: false,
+                                                           inheritDownloadedFileQuarantine: false,
+                                                           quarantineSourceArchivePath: nil)
+
+        // The lease lives as long as `extraction`; keep it alive across the blocking check so the
+        // assertion can't be defeated by early release of the carrier.
+        withExtendedLifetime(extraction) {
+            XCTAssertNotNil(extraction.archiveOperationLease,
+                            "A prepared extraction must hold an operation-gate lease so close() waits for it")
+            XCTAssertNil(coordinator.currentMutationTarget(),
+                         "A held extraction lease must block concurrent in-place mutation targets")
+        }
+    }
+
+    func testCurrentArchiveForTestLeasesOperationGateSoCloseWaits() throws {
+        let session = FileManagerArchiveSession()
+        let prepared = try makePreparedArchive(named: "test-lease")
+        session.appendPreparedArchive(prepared)
+        let coordinator = makeCoordinator(session: session)
+
+        let leasedArchive = try coordinator.currentArchiveForTest()
+
+        XCTAssertTrue(leasedArchive.archive === prepared.archive)
+        withExtendedLifetime(leasedArchive) {
+            XCTAssertNotNil(leasedArchive.lease,
+                            "Testing the current archive must hold an operation-gate lease so close() waits for it")
+            XCTAssertNil(coordinator.currentMutationTarget(),
+                         "A held test lease must block concurrent in-place mutation targets")
+        }
+    }
+
     private func makeCoordinator(session: FileManagerArchiveSession,
                                  observerIdentifier: ObjectIdentifier = ObjectIdentifier(NSObject()),
                                  isViewLoaded: @escaping () -> Bool = { false },

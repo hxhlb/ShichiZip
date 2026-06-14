@@ -211,8 +211,8 @@ enum FileManagerArchiveCommandSupport {
 
             do {
                 if isVirtualLocation {
-                    let archive = try activePane.currentArchiveForTest()
-                    try await testPreparedArchive(archive,
+                    let leasedArchive = try activePane.currentArchiveForTest()
+                    try await testPreparedArchive(leasedArchive,
                                                   parentWindow: parentWindow)
                 } else {
                     try await testArchiveCandidate(archiveCandidateURL,
@@ -326,13 +326,14 @@ enum FileManagerArchiveCommandSupport {
         }
     }
 
-    static func testPreparedArchive(_ archive: SZArchive,
+    static func testPreparedArchive(_ leasedArchive: FileManagerLeasedArchive,
                                     parentWindow: NSWindow) async throws
     {
         try await ArchiveOperationRunner.run(operationTitle: SZL10n.string("progress.testing"),
                                              parentWindow: parentWindow)
         { session in
-            try archive.test(with: session)
+            // Captured by value, so the lease is held for the whole test and released when done.
+            try leasedArchive.archive.test(with: session)
         }
     }
 
