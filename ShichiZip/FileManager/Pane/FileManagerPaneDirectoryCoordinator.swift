@@ -86,13 +86,15 @@ final class FileManagerPaneDirectoryCoordinator {
     private let showError: (Error) -> Void
     private let directoryDidChange: () -> Void
     private let setDirectoryLoadingVisible: (Bool) -> Void
-    private let makeSnapshot: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot
+    private let makeSnapshot: @Sendable (URL) throws -> FileManagerDirectorySnapshot
+    private let showsHiddenFiles: () -> Bool
 
     private var snapshotGeneration = 0
     private var directoryWatcher: DirectoryWatcher?
     private var recentDirectories: [URL] = []
 
     private(set) var currentDirectory: URL
+    private var allItems: [FileSystemItem] = []
     private(set) var items: [FileSystemItem] = []
 
     init(initialDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -116,7 +118,8 @@ final class FileManagerPaneDirectoryCoordinator {
          showError: @escaping (Error) -> Void,
          directoryDidChange: @escaping () -> Void,
          setDirectoryLoadingVisible: @escaping (Bool) -> Void = { _ in },
-         makeSnapshot: @escaping @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0, options: $1) })
+         makeSnapshot: @escaping @Sendable (URL) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0) },
+         showsHiddenFiles: @escaping () -> Bool = { SZSettings.bool(.showHiddenFiles) })
     {
         currentDirectory = initialDirectory
         self.snapshotQueue = snapshotQueue
@@ -139,6 +142,7 @@ final class FileManagerPaneDirectoryCoordinator {
         self.directoryDidChange = directoryDidChange
         self.setDirectoryLoadingVisible = setDirectoryLoadingVisible
         self.makeSnapshot = makeSnapshot
+        self.showsHiddenFiles = showsHiddenFiles
     }
 
     var hasRecentDirectoryHistory: Bool {
@@ -200,7 +204,7 @@ final class FileManagerPaneDirectoryCoordinator {
                                        focusAfterLoad: Bool) -> Bool
     {
         do {
-            let snapshot = try makeSnapshot(url, directoryEnumerationOptions())
+            let snapshot = try makeSnapshot(url)
             return applyNavigationSnapshot(snapshot,
                                            selectionState: selectionState,
                                            focusAfterLoad: focusAfterLoad)
@@ -220,7 +224,6 @@ final class FileManagerPaneDirectoryCoordinator {
     {
         snapshotGeneration += 1
         let generation = snapshotGeneration
-        let options = directoryEnumerationOptions()
         let make = makeSnapshot
         let box = FileManagerDirectorySnapshotBox()
         let purpose = SnapshotPurpose.navigate(selectionState: selectionState,
@@ -228,7 +231,7 @@ final class FileManagerPaneDirectoryCoordinator {
                                                showError: showError)
 
         snapshotQueue.async {
-            box.store(Result { try make(url, options) })
+            box.store(Result { try make(url) })
             DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
                     self?.finishDirectorySnapshot(box.take(),
@@ -287,9 +290,19 @@ final class FileManagerPaneDirectoryCoordinator {
                                   purpose: .autoRefresh(selectionState: captureSelectionState()))
     }
 
+    func reapplyHiddenFileVisibility() {
+        guard !isInsideArchive() else { return }
+        let selectionState = captureSelectionState()
+        items = visibleItems(from: allItems)
+        sortCurrentItems()
+        reloadTableData()
+        updateStatusBar()
+        restoreSelectionState(selectionState)
+    }
+
     func loadInitialDirectory(_ url: URL) {
         do {
-            let snapshot = try makeSnapshot(url.standardizedFileURL, directoryEnumerationOptions())
+            let snapshot = try makeSnapshot(url.standardizedFileURL)
             applyDirectorySnapshot(snapshot)
         } catch {
             currentDirectory = url.standardizedFileURL
@@ -307,12 +320,14 @@ final class FileManagerPaneDirectoryCoordinator {
         recordDirectoryVisit(hostDirectory)
         cancelPendingSnapshot()
         tearDownDirectoryWatcher()
+        allItems.removeAll()
         items.removeAll()
     }
 
     func prepareForSuspension() {
         tearDownDirectoryWatcher()
         cancelPendingSnapshot()
+        allItems.removeAll()
         items.removeAll()
         reloadTableData()
     }
@@ -322,8 +337,8 @@ final class FileManagerPaneDirectoryCoordinator {
         cancelPendingSnapshot()
     }
 
-    private func directoryEnumerationOptions() -> FileManager.DirectoryEnumerationOptions {
-        SZSettings.bool(.showHiddenFiles) ? [] : [.skipsHiddenFiles]
+    private func visibleItems(from source: [FileSystemItem]) -> [FileSystemItem] {
+        showsHiddenFiles() ? source : source.filter { !$0.isHidden }
     }
 
     private func stableSnapshotItems(_ items: [FileSystemItem]) -> [FileSystemItem] {
@@ -372,12 +387,11 @@ final class FileManagerPaneDirectoryCoordinator {
     {
         snapshotGeneration += 1
         let generation = snapshotGeneration
-        let options = directoryEnumerationOptions()
         let make = makeSnapshot
 
         snapshotQueue.async {
             let result = Result {
-                try make(url, options)
+                try make(url)
             }
 
             DispatchQueue.main.async { [weak self] in
@@ -417,7 +431,7 @@ final class FileManagerPaneDirectoryCoordinator {
         case let .autoRefresh(selectionState):
             guard case let .success(snapshot) = result, !isInsideArchive() else { return }
             guard snapshot.url.standardizedFileURL == currentDirectory.standardizedFileURL else { return }
-            guard stableSnapshotItems(snapshot.items) != stableSnapshotItems(items) else { return }
+            guard stableSnapshotItems(snapshot.items) != stableSnapshotItems(allItems) else { return }
             applyDirectorySnapshot(snapshot, recordVisit: false)
             restoreSelectionState(selectionState)
 
@@ -437,7 +451,8 @@ final class FileManagerPaneDirectoryCoordinator {
             recordDirectoryVisit(snapshot.url)
         }
         updatePathField()
-        items = snapshot.items
+        allItems = snapshot.items
+        items = visibleItems(from: allItems)
         updateTableColumns()
         sortCurrentItems()
         reloadTableData()

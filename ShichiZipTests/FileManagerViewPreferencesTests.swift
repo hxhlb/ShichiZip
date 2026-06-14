@@ -587,8 +587,7 @@ final class FileManagerDirectoryListingTests: XCTestCase {
         try FileManager.default.createDirectory(at: childDirectory, withIntermediateDirectories: true)
         try "payload".write(to: childFile, atomically: true, encoding: .utf8)
 
-        let entries = try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: presentedDirectory,
-                                                                                     options: [])
+        let entries = try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: presentedDirectory)
             .sorted { $0.url.lastPathComponent < $1.url.lastPathComponent }
 
         XCTAssertEqual(entries.map { $0.url.deletingLastPathComponent().standardizedFileURL },

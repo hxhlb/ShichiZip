@@ -288,6 +288,38 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
         }
     }
 
+    func testReapplyHiddenVisibilityFiltersAndRestoresSelectionWithoutReloadingEntries() {
+        var showHidden = true
+        let session = FileManagerArchiveSession(showsHiddenFiles: { showHidden })
+        session.appendPreparedArchive(FileManagerPreparedArchiveOpen(hostDirectory: URL(fileURLWithPath: "/tmp"),
+                                                                     archivePath: "/tmp/source.7z",
+                                                                     displayPathPrefix: "/tmp/source.7z",
+                                                                     archive: SZArchive(),
+                                                                     entries: [
+                                                                         makeArchiveItem(index: 0, path: "visible.txt"),
+                                                                         makeArchiveItem(index: 1, path: ".secret.txt"),
+                                                                     ],
+                                                                     temporaryDirectory: nil,
+                                                                     nestedWriteBackInfo: nil))
+        XCTAssertEqual(Set(session.displayItems.map(\.path)), ["visible.txt", ".secret.txt"])
+
+        var reloadCount = 0
+        var restoredSelection: [String]?
+        let coordinator = makeCoordinator(session: session,
+                                          reloadTableData: { reloadCount += 1 },
+                                          selectArchivePaths: { restoredSelection = $0 },
+                                          selectedArchivePaths: { ["visible.txt"] })
+
+        showHidden = false
+        coordinator.reapplyHiddenVisibility()
+
+        XCTAssertEqual(session.displayItems.map(\.path), ["visible.txt"],
+                       "Toggling hidden files off must re-filter the cached display items")
+        XCTAssertEqual(reloadCount, 1, "Reapplying visibility must reload the table once")
+        XCTAssertEqual(restoredSelection, ["visible.txt"],
+                       "The captured selection must be restored after re-filtering")
+    }
+
     private func makeCoordinator(session: FileManagerArchiveSession,
                                  observerIdentifier: ObjectIdentifier = ObjectIdentifier(NSObject()),
                                  isViewLoaded: @escaping () -> Bool = { false },
@@ -296,6 +328,7 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                  updateTableColumns: @escaping () -> Void = {},
                                  reloadTableData: @escaping () -> Void = {},
                                  selectArchivePaths: @escaping ([String]) -> Void = { _ in },
+                                 selectedArchivePaths: @escaping () -> [String] = { [] },
                                  hasConflictingNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false }) -> FileManagerPaneArchiveCoordinator
     {
         FileManagerPaneArchiveCoordinator(archiveSession: session,
@@ -307,6 +340,7 @@ final class FileManagerPaneArchiveCoordinatorTests: XCTestCase {
                                           prepareDirectoryForArchivePresentation: prepareDirectoryForArchivePresentation,
                                           reloadTableData: reloadTableData,
                                           selectArchivePaths: selectArchivePaths,
+                                          selectedArchivePaths: selectedArchivePaths,
                                           hasConflictingNestedArchiveInstance: hasConflictingNestedArchiveInstance,
                                           showError: { error in
                                               XCTFail("Unexpected archive coordinator error: \(error)")

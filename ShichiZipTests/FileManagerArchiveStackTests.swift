@@ -118,6 +118,35 @@ final class FileManagerArchiveStackTests: XCTestCase {
         XCTAssertEqual(session.displayItems.map(\.path), ["implicit/nested.txt"])
     }
 
+    @MainActor
+    func testArchiveSessionFiltersHiddenItemsAndTogglesWithoutReloading() {
+        var showHidden = false
+        let session = FileManagerArchiveSession(showsHiddenFiles: { showHidden })
+        let prepared = FileManagerPreparedArchiveOpen(hostDirectory: URL(fileURLWithPath: "/tmp"),
+                                                      archivePath: "/tmp/source.7z",
+                                                      displayPathPrefix: "/tmp/source.7z",
+                                                      archive: SZArchive(),
+                                                      entries: [
+                                                          makeArchiveItem(index: 0,
+                                                                          path: "visible.txt"),
+                                                          makeArchiveItem(index: 1,
+                                                                          path: ".secret.txt"),
+                                                      ],
+                                                      temporaryDirectory: nil,
+                                                      nestedWriteBackInfo: nil)
+
+        session.appendPreparedArchive(prepared)
+        XCTAssertEqual(session.displayItems.map(\.path), ["visible.txt"])
+
+        showHidden = true
+        session.applyHiddenVisibilityFilter()
+        XCTAssertEqual(Set(session.displayItems.map(\.path)), ["visible.txt", ".secret.txt"])
+
+        showHidden = false
+        session.applyHiddenVisibilityFilter()
+        XCTAssertEqual(session.displayItems.map(\.path), ["visible.txt"])
+    }
+
     private func makeLevel(archivePath: String,
                            archive: SZArchive = SZArchive(),
                            currentSubdir: String = "",

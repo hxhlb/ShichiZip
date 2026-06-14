@@ -1,4 +1,5 @@
 import Foundation
+import os
 #if SHICHIZIP_ZS_VARIANT
     @testable import ShichiZip_ZS
 #else
@@ -113,7 +114,7 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
         let directoryURL = try makeTemporaryDirectory(named: "budget-fast",
                                                       prefix: "ShichiZipDirectoryCoordinatorTests")
         var loadingEvents: [Bool] = []
-        let provider: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { url, _ in
+        let provider: @Sendable (URL) throws -> FileManagerDirectorySnapshot = { url in
             FileManagerDirectorySnapshot(url: url,
                                          items: [FileSystemItem(url: url.appendingPathComponent("alpha.txt"),
                                                                 resourceValues: nil)])
@@ -140,7 +141,7 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
         var loadingEvents: [Bool] = []
         let applyExpectation = expectation(description: "async snapshot applied")
         applyExpectation.assertForOverFulfill = false
-        let provider: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { url, _ in
+        let provider: @Sendable (URL) throws -> FileManagerDirectorySnapshot = { url in
             gate.wait()
             return FileManagerDirectorySnapshot(url: url,
                                                 items: [FileSystemItem(url: url.appendingPathComponent("beta.txt"),
@@ -166,6 +167,40 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.items.map(\.name), ["beta.txt"])
         XCTAssertEqual(coordinator.currentDirectory.standardizedFileURL,
                        directoryURL.standardizedFileURL)
+    }
+
+    func testReapplyHiddenFileVisibilityFiltersWithoutReenumerating() throws {
+        let directoryURL = try makeTemporaryDirectory(named: "render-filter",
+                                                      prefix: "ShichiZipDirectoryCoordinatorTests")
+        let enumerationCount = OSAllocatedUnfairLock(initialState: 0)
+        let provider: @Sendable (URL) throws -> FileManagerDirectorySnapshot = { url in
+            enumerationCount.withLock { $0 += 1 }
+            return FileManagerDirectorySnapshot(url: url,
+                                                items: [FileSystemItem(url: url.appendingPathComponent("alpha.txt"),
+                                                                       resourceValues: nil),
+                                                        FileSystemItem(url: url.appendingPathComponent(".secret"),
+                                                                       resourceValues: nil)])
+        }
+        var showHidden = false
+        var reloadCount = 0
+        let coordinator = makeCoordinator(reloadTableData: { reloadCount += 1 },
+                                          makeSnapshot: provider,
+                                          showsHiddenFiles: { showHidden })
+        defer { coordinator.tearDown() }
+
+        XCTAssertTrue(coordinator.loadDirectory(directoryURL))
+        XCTAssertEqual(coordinator.items.map(\.name), ["alpha.txt"])
+
+        showHidden = true
+        coordinator.reapplyHiddenFileVisibility()
+        XCTAssertEqual(Set(coordinator.items.map(\.name)), ["alpha.txt", ".secret"])
+
+        showHidden = false
+        coordinator.reapplyHiddenFileVisibility()
+        XCTAssertEqual(coordinator.items.map(\.name), ["alpha.txt"])
+
+        XCTAssertGreaterThan(reloadCount, 1)
+        XCTAssertEqual(enumerationCount.withLock { $0 }, 1)
     }
 
     func testPaneDeinitWithoutLoadedViewDoesNotInitializeCoordinators() {
@@ -209,7 +244,8 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                  showError: @escaping (Error) -> Void = { error in XCTFail("Unexpected directory coordinator error: \(error)") },
                                  directoryDidChange: @escaping () -> Void = {},
                                  setDirectoryLoadingVisible: @escaping (Bool) -> Void = { _ in },
-                                 makeSnapshot: @escaping @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0, options: $1) }) -> FileManagerPaneDirectoryCoordinator
+                                 makeSnapshot: @escaping @Sendable (URL) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0) },
+                                 showsHiddenFiles: @escaping () -> Bool = { false }) -> FileManagerPaneDirectoryCoordinator
     {
         FileManagerPaneDirectoryCoordinator(isViewLoaded: isViewLoaded,
                                             isInsideArchive: isInsideArchive,
@@ -229,6 +265,7 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                             showError: showError,
                                             directoryDidChange: directoryDidChange,
                                             setDirectoryLoadingVisible: setDirectoryLoadingVisible,
-                                            makeSnapshot: makeSnapshot)
+                                            makeSnapshot: makeSnapshot,
+                                            showsHiddenFiles: showsHiddenFiles)
     }
 }

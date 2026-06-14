@@ -19,18 +19,7 @@ enum FileManagerDirectoryListing {
         .isHiddenKey,
     ]
 
-    static func contentsPreservingPresentedPath(for url: URL,
-                                                options: FileManager.DirectoryEnumerationOptions,
-                                                fileManager: FileManager = .default) throws -> [URL]
-    {
-        try entriesPreservingPresentedPath(for: url,
-                                           options: options,
-                                           fileManager: fileManager)
-            .map(\.url)
-    }
-
     static func entriesPreservingPresentedPath(for url: URL,
-                                               options: FileManager.DirectoryEnumerationOptions,
                                                fileManager: FileManager = .default) throws -> [FileManagerDirectoryListingEntry]
     {
         let resourceValues = try url.resourceValues(forKeys: Self.resourceKeys)
@@ -46,7 +35,7 @@ enum FileManagerDirectoryListing {
         let contents = try fileManager.contentsOfDirectory(
             at: listingURL,
             includingPropertiesForKeys: Array(Self.resourceKeys),
-            options: options,
+            options: [],
         )
 
         let entries = contents.map { childURL in
@@ -73,11 +62,8 @@ struct FileManagerDirectorySnapshot {
     let url: URL
     let items: [FileSystemItem]
 
-    static func make(for url: URL,
-                     options: FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot
-    {
-        let entries = try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: url,
-                                                                                     options: options)
+    static func make(for url: URL) throws -> FileManagerDirectorySnapshot {
+        let entries = try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: url)
         let items = entries.map { entry in
             FileSystemItem(url: entry.url, resourceValues: entry.resourceValues)
         }

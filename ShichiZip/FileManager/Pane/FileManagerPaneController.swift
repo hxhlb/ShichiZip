@@ -161,6 +161,10 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             selectArchivePaths: { [weak self] paths in
                 self?.selectArchivePaths(paths)
             },
+            selectedArchivePaths: { [weak self] in
+                guard let self else { return [] }
+                return selectedArchiveItems().map { normalizeArchivePath($0.path) }
+            },
             hasConflictingNestedArchiveInstance: { [weak self] identity in
                 self?.hasConflictingNestedArchiveInstance(for: identity) == true
             },
@@ -322,7 +326,12 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                                        folderTypeID: FileManagerViewPreferences.fileSystemListViewFolderTypeID)
             },
             sortItems: { [weak self] descriptors in
-                self?.sortCurrentItems(by: descriptors)
+                guard let self else { return }
+                if isInsideArchive {
+                    archiveSession.sortDisplayItems(by: descriptors)
+                } else {
+                    directoryCoordinator.sortItems(by: descriptors)
+                }
             },
             reloadTableData: { [weak self] in
                 self?.tableView.reloadData()
@@ -1130,7 +1139,11 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             }
             applyFileManagerSettings()
         case .showHiddenFiles:
-            refresh()
+            if isInsideArchive {
+                archiveCoordinator.reapplyHiddenVisibility()
+            } else {
+                directoryCoordinator.reapplyHiddenFileVisibility()
+            }
             return
         case .fileManagerShortcutPreset, .fileManagerCustomShortcuts:
             refreshContextMenu()
@@ -1667,14 +1680,6 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     }
 
     // MARK: - Item Sorting
-
-    private func sortCurrentItems(by descriptors: [NSSortDescriptor]) {
-        if isInsideArchive {
-            archiveSession.sortDisplayItems(by: descriptors)
-        } else {
-            directoryCoordinator.sortItems(by: descriptors)
-        }
-    }
 
     private func sortCurrentItemsByCurrentListViewDescriptors() {
         guard isViewLoaded else { return }

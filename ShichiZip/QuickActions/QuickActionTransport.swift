@@ -88,7 +88,7 @@ public enum ShichiZipQuickActionTransport {
                                                                                  includingPropertiesForKeys: [.isRegularFileKey,
                                                                                                               .contentModificationDateKey,
                                                                                                               .creationDateKey],
-                                                                                 options: [.skipsHiddenFiles])
+                                                                                 options: [])
         else {
             log("stale cleanup skipped bundle=\(bundleIdentifier) appGroupIdentifier=\(appGroupIdentifier ?? "<missing>")")
             return

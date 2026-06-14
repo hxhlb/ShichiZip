@@ -330,6 +330,6 @@ final class QuickActionTransportTests: XCTestCase {
     private func stagedPayloadURLs() -> [URL] {
         (try? FileManager.default.contentsOfDirectory(at: requestDirectoryURL,
                                                       includingPropertiesForKeys: nil,
-                                                      options: [.skipsHiddenFiles])) ?? []
+                                                      options: [])) ?? []
     }
 }

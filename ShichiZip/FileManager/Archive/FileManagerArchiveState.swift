@@ -219,11 +219,16 @@ struct FileManagerArchiveStack {
 @MainActor
 final class FileManagerArchiveSession {
     private var stack = FileManagerArchiveStack()
+    private var allDisplayItems: [ArchiveItem] = []
     private(set) var displayItems: [ArchiveItem] = []
+    private let showsHiddenFiles: () -> Bool
     let itemWorkflowService: FileManagerArchiveItemWorkflowService
 
-    init(itemWorkflowService: FileManagerArchiveItemWorkflowService = FileManagerArchiveItemWorkflowService()) {
+    init(itemWorkflowService: FileManagerArchiveItemWorkflowService = FileManagerArchiveItemWorkflowService(),
+         showsHiddenFiles: @escaping () -> Bool = { SZSettings.bool(.showHiddenFiles) })
+    {
         self.itemWorkflowService = itemWorkflowService
+        self.showsHiddenFiles = showsHiddenFiles
     }
 
     var isInsideArchive: Bool {
@@ -387,7 +392,8 @@ final class FileManagerArchiveSession {
             }
         }
 
-        displayItems = visibleItems
+        allDisplayItems = visibleItems
+        applyHiddenVisibilityFilter()
         return true
     }
 
@@ -408,16 +414,23 @@ final class FileManagerArchiveSession {
         }
 
         if stack.isEmpty {
+            allDisplayItems.removeAll()
             displayItems.removeAll()
         }
     }
 
     func clearDisplayItems() {
+        allDisplayItems.removeAll()
         displayItems.removeAll()
     }
 
     func sortDisplayItems(by descriptors: [NSSortDescriptor]) {
-        FileManagerItemSorting.sort(&displayItems, by: descriptors)
+        FileManagerItemSorting.sort(&allDisplayItems, by: descriptors)
+        applyHiddenVisibilityFilter()
+    }
+
+    func applyHiddenVisibilityFilter() {
+        displayItems = showsHiddenFiles() ? allDisplayItems : allDisplayItems.filter { !$0.isHidden }
     }
 
     func currentItemWorkflowContext(acquireLease: Bool = true,

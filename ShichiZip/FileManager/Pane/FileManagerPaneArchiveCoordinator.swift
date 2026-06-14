@@ -14,6 +14,7 @@ final class FileManagerPaneArchiveCoordinator {
     private let updateStatusBar: () -> Void
     private let reloadTableData: () -> Void
     private let selectArchivePaths: ([String]) -> Void
+    private let selectedArchivePaths: () -> [String]
     private let hasConflictingNestedArchiveInstance: (FileManagerNestedArchiveIdentity) -> Bool
     private let hasDirtyNestedArchiveInstance: (FileManagerNestedArchiveIdentity) -> Bool
     private let showError: (Error) -> Void
@@ -33,6 +34,7 @@ final class FileManagerPaneArchiveCoordinator {
          updateStatusBar: @escaping () -> Void = {},
          reloadTableData: @escaping () -> Void = {},
          selectArchivePaths: @escaping ([String]) -> Void,
+         selectedArchivePaths: @escaping () -> [String] = { [] },
          hasConflictingNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false },
          hasDirtyNestedArchiveInstance: @escaping (FileManagerNestedArchiveIdentity) -> Bool = { _ in false },
          showError: @escaping (Error) -> Void)
@@ -49,6 +51,7 @@ final class FileManagerPaneArchiveCoordinator {
         self.updateStatusBar = updateStatusBar
         self.reloadTableData = reloadTableData
         self.selectArchivePaths = selectArchivePaths
+        self.selectedArchivePaths = selectedArchivePaths
         self.hasConflictingNestedArchiveInstance = hasConflictingNestedArchiveInstance
         self.hasDirtyNestedArchiveInstance = hasDirtyNestedArchiveInstance
         self.showError = showError
@@ -362,6 +365,14 @@ final class FileManagerPaneArchiveCoordinator {
         scheduleEntriesReload(at: archiveSession.count - 1,
                               selectingPaths: paths,
                               preservingSubdir: level.currentSubdir)
+    }
+
+    func reapplyHiddenVisibility() {
+        let selectedPaths = selectedArchivePaths()
+        archiveSession.applyHiddenVisibilityFilter()
+        reloadTableData()
+        updateStatusBar()
+        selectArchivePaths(selectedPaths)
     }
 
     func handlePublishedArchiveChange(_ change: FileManagerArchiveChange) {
