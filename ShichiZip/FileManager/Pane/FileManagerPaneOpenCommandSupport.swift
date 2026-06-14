@@ -18,7 +18,8 @@ enum FileManagerPaneOpenCommandSupport {
 
         case let .filesystem(fileSystemItem):
             if fileSystemItem.isDirectory {
-                pane.loadDirectory(fileSystemItem.url)
+                pane.loadDirectory(fileSystemItem.url,
+                                   budget: FileManagerPaneDirectoryCoordinator.navigationBudget)
             } else {
                 _ = pane.openCommandOpenArchiveInline(fileSystemItem.url,
                                                       hostDirectory: pane.currentDirectoryURL,
@@ -84,7 +85,8 @@ enum FileManagerPaneOpenCommandSupport {
 
         case let .filesystem(fileSystemItem):
             if fileSystemItem.isDirectory {
-                pane.loadDirectory(fileSystemItem.url)
+                pane.loadDirectory(fileSystemItem.url,
+                                   budget: FileManagerPaneDirectoryCoordinator.navigationBudget)
             } else {
                 openFileSystemFile(fileSystemItem,
                                    in: pane)

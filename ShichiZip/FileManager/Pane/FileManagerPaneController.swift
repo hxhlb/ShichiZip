@@ -17,6 +17,7 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
     private var tableView: NSTableView!
     private var scrollView: NSScrollView!
     private var statusLabel: NSTextField!
+    private var directoryLoadingOverlay: NSView?
     private var listViewCoordinator: FileManagerPaneListViewCoordinator!
     private var menuHandler: FileManagerPaneMenuHandler!
     private var eventCoordinator: FileManagerPaneEventCoordinator?
@@ -106,6 +107,9 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
             },
             directoryDidChange: { [weak self] in
                 self?.autoRefreshIfPossible()
+            },
+            setDirectoryLoadingVisible: { [weak self] visible in
+                self?.setDirectoryLoadingOverlayVisible(visible)
             },
         )
         directoryCoordinatorStorage = coordinator
@@ -393,22 +397,64 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
     @discardableResult
     func loadDirectory(_ url: URL,
-                       showError: Bool = true) -> Bool
+                       showError: Bool = true,
+                       budget: Duration? = nil) -> Bool
     {
         directoryCoordinator.loadDirectory(url,
-                                           showError: showError)
+                                           showError: showError,
+                                           budget: budget)
     }
 
     @discardableResult
     private func navigateToDirectory(_ url: URL,
                                      showError: Bool,
                                      selectionState: FileManagerFileSystemSelectionState? = nil,
-                                     focusAfterLoad: Bool = false) -> Bool
+                                     focusAfterLoad: Bool = false,
+                                     budget: Duration? = nil) -> Bool
     {
         directoryCoordinator.navigateToDirectory(url,
                                                  showError: showError,
                                                  selectionState: selectionState,
-                                                 focusAfterLoad: focusAfterLoad)
+                                                 focusAfterLoad: focusAfterLoad,
+                                                 budget: budget)
+    }
+
+    private func setDirectoryLoadingOverlayVisible(_ visible: Bool) {
+        if visible {
+            showDirectoryLoadingOverlay()
+        } else {
+            directoryLoadingOverlay?.removeFromSuperview()
+            directoryLoadingOverlay = nil
+        }
+    }
+
+    private func showDirectoryLoadingOverlay() {
+        guard isViewLoaded, directoryLoadingOverlay == nil else { return }
+
+        let overlay = NSView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.wantsLayer = true
+        overlay.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.6).cgColor
+        overlay.setAccessibilityIdentifier("fileManager.directoryLoadingOverlay")
+
+        let spinner = NSProgressIndicator()
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.style = .spinning
+        spinner.controlSize = .regular
+        spinner.startAnimation(nil)
+        overlay.addSubview(spinner)
+
+        view.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+        ])
+
+        directoryLoadingOverlay = overlay
     }
 
     private func reloadCurrentDirectoryPreservingSelection() {
@@ -650,7 +696,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
                                         showError: Bool = true) -> Bool
     {
         loadDirectory(url,
-                      showError: showError)
+                      showError: showError,
+                      budget: FileManagerPaneDirectoryCoordinator.navigationBudget)
     }
 
     func navigationCommandNavigateArchiveSubdir(_ subdir: String) {
@@ -979,7 +1026,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
         navigateToDirectory(target.parentDirectory,
                             showError: true,
                             selectionState: selectionState,
-                            focusAfterLoad: true)
+                            focusAfterLoad: true,
+                            budget: FileManagerPaneDirectoryCoordinator.navigationBudget)
         return true
     }
 
@@ -993,7 +1041,8 @@ class FileManagerPaneController: NSViewController, NSTableViewDataSource, NSTabl
 
             navigateToDirectory(directoryURL,
                                 showError: true,
-                                focusAfterLoad: true)
+                                focusAfterLoad: true,
+                                budget: FileManagerPaneDirectoryCoordinator.navigationBudget)
             return true
         case let .file(fileURL, hostDirectory):
             return openFileSystemArchiveURL(fileURL,

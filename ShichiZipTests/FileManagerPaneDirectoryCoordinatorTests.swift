@@ -109,6 +109,65 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
         XCTAssertEqual(scrolledRows.first?.1, .centered)
     }
 
+    func testBudgetedNavigationAppliesSnapshotInlineWithoutLoadingWhenFast() throws {
+        let directoryURL = try makeTemporaryDirectory(named: "budget-fast",
+                                                      prefix: "ShichiZipDirectoryCoordinatorTests")
+        var loadingEvents: [Bool] = []
+        let provider: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { url, _ in
+            FileManagerDirectorySnapshot(url: url,
+                                         items: [FileSystemItem(url: url.appendingPathComponent("alpha.txt"),
+                                                                resourceValues: nil)])
+        }
+        let coordinator = makeCoordinator(setDirectoryLoadingVisible: { loadingEvents.append($0) },
+                                          makeSnapshot: provider)
+        defer { coordinator.tearDown() }
+
+        let applied = coordinator.navigateToDirectory(directoryURL,
+                                                      showError: true,
+                                                      budget: .milliseconds(500))
+
+        XCTAssertTrue(applied)
+        XCTAssertFalse(loadingEvents.contains(true))
+        XCTAssertEqual(coordinator.items.map(\.name), ["alpha.txt"])
+        XCTAssertEqual(coordinator.currentDirectory.standardizedFileURL,
+                       directoryURL.standardizedFileURL)
+    }
+
+    func testBudgetedNavigationShowsLoadingThenAppliesWhenSlow() throws {
+        let directoryURL = try makeTemporaryDirectory(named: "budget-slow",
+                                                      prefix: "ShichiZipDirectoryCoordinatorTests")
+        let gate = DispatchSemaphore(value: 0)
+        var loadingEvents: [Bool] = []
+        let applyExpectation = expectation(description: "async snapshot applied")
+        applyExpectation.assertForOverFulfill = false
+        let provider: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { url, _ in
+            gate.wait()
+            return FileManagerDirectorySnapshot(url: url,
+                                                items: [FileSystemItem(url: url.appendingPathComponent("beta.txt"),
+                                                                       resourceValues: nil)])
+        }
+        let coordinator = makeCoordinator(reloadTableData: { applyExpectation.fulfill() },
+                                          setDirectoryLoadingVisible: { loadingEvents.append($0) },
+                                          makeSnapshot: provider)
+        defer { coordinator.tearDown() }
+
+        let applied = coordinator.navigateToDirectory(directoryURL,
+                                                      showError: true,
+                                                      budget: .milliseconds(20))
+
+        XCTAssertTrue(applied)
+        XCTAssertTrue(loadingEvents.contains(true))
+        XCTAssertTrue(coordinator.items.isEmpty)
+
+        gate.signal()
+        wait(for: [applyExpectation], timeout: 2)
+
+        XCTAssertEqual(loadingEvents.last, false)
+        XCTAssertEqual(coordinator.items.map(\.name), ["beta.txt"])
+        XCTAssertEqual(coordinator.currentDirectory.standardizedFileURL,
+                       directoryURL.standardizedFileURL)
+    }
+
     func testPaneDeinitWithoutLoadedViewDoesNotInitializeCoordinators() {
         weak var weakPane: FileManagerPaneController?
 
@@ -148,7 +207,9 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                  deselectRows: @escaping () -> Void = {},
                                  scrollRow: @escaping (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void = { _, _ in },
                                  showError: @escaping (Error) -> Void = { error in XCTFail("Unexpected directory coordinator error: \(error)") },
-                                 directoryDidChange: @escaping () -> Void = {}) -> FileManagerPaneDirectoryCoordinator
+                                 directoryDidChange: @escaping () -> Void = {},
+                                 setDirectoryLoadingVisible: @escaping (Bool) -> Void = { _ in },
+                                 makeSnapshot: @escaping @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0, options: $1) }) -> FileManagerPaneDirectoryCoordinator
     {
         FileManagerPaneDirectoryCoordinator(isViewLoaded: isViewLoaded,
                                             isInsideArchive: isInsideArchive,
@@ -166,6 +227,8 @@ final class FileManagerPaneDirectoryCoordinatorTests: XCTestCase {
                                             deselectRows: deselectRows,
                                             scrollRow: scrollRow,
                                             showError: showError,
-                                            directoryDidChange: directoryDidChange)
+                                            directoryDidChange: directoryDidChange,
+                                            setDirectoryLoadingVisible: setDirectoryLoadingVisible,
+                                            makeSnapshot: makeSnapshot)
     }
 }

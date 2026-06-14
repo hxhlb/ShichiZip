@@ -1,4 +1,37 @@
 import Foundation
+import os
+
+private struct FileManagerDirectorySnapshotStoredResult: @unchecked Sendable {
+    let result: Result<FileManagerDirectorySnapshot, Error>
+}
+
+/// Hands a directory snapshot from the background queue back to the main actor. `state` owns
+/// synchronization; `ready` lets a budgeted navigation wait briefly for an inline result.
+private final class FileManagerDirectorySnapshotBox: @unchecked Sendable {
+    private let state = OSAllocatedUnfairLock(initialState: nil as FileManagerDirectorySnapshotStoredResult?)
+    let ready = DispatchSemaphore(value: 0)
+
+    func store(_ result: Result<FileManagerDirectorySnapshot, Error>) {
+        let stored = FileManagerDirectorySnapshotStoredResult(result: result)
+        state.withLock { $0 = stored }
+        ready.signal()
+    }
+
+    /// Returns the stored result once, then clears it so the inline and asynchronous deliveries
+    /// never both apply the same snapshot.
+    func take() -> Result<FileManagerDirectorySnapshot, Error>? {
+        state.withLock { value in
+            defer { value = nil }
+            return value?.result
+        }
+    }
+}
+
+private extension Duration {
+    var timeoutSeconds: Double {
+        Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
+}
 
 enum FileManagerFileSystemSelectionScrollPlacement {
     case visible
@@ -20,7 +53,15 @@ final class FileManagerPaneDirectoryCoordinator {
     private enum SnapshotPurpose {
         case refresh(selectionState: FileManagerFileSystemSelectionState)
         case autoRefresh(selectionState: FileManagerFileSystemSelectionState)
+        case navigate(selectionState: FileManagerFileSystemSelectionState?,
+                      focusAfterLoad: Bool,
+                      showError: Bool)
     }
+
+    /// How long a user-initiated navigation blocks for an inline snapshot before falling back to an
+    /// asynchronous load with a loading indicator. Below the ~100ms perceptible threshold, so fast
+    /// directories still apply atomically with no visible loading state.
+    static let navigationBudget: Duration = .milliseconds(100)
 
     private static var snapshotQueueLabel: String {
         "\(Bundle.main.bundleIdentifier ?? "ShichiZip").file-manager.directory-snapshot"
@@ -44,6 +85,8 @@ final class FileManagerPaneDirectoryCoordinator {
     private let scrollRow: (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void
     private let showError: (Error) -> Void
     private let directoryDidChange: () -> Void
+    private let setDirectoryLoadingVisible: (Bool) -> Void
+    private let makeSnapshot: @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot
 
     private var snapshotGeneration = 0
     private var directoryWatcher: DirectoryWatcher?
@@ -71,7 +114,9 @@ final class FileManagerPaneDirectoryCoordinator {
          deselectRows: @escaping () -> Void,
          scrollRow: @escaping (Int, FileManagerFileSystemSelectionScrollPlacement) -> Void,
          showError: @escaping (Error) -> Void,
-         directoryDidChange: @escaping () -> Void)
+         directoryDidChange: @escaping () -> Void,
+         setDirectoryLoadingVisible: @escaping (Bool) -> Void = { _ in },
+         makeSnapshot: @escaping @Sendable (URL, FileManager.DirectoryEnumerationOptions) throws -> FileManagerDirectorySnapshot = { try FileManagerDirectorySnapshot.make(for: $0, options: $1) })
     {
         currentDirectory = initialDirectory
         self.snapshotQueue = snapshotQueue
@@ -92,6 +137,8 @@ final class FileManagerPaneDirectoryCoordinator {
         self.scrollRow = scrollRow
         self.showError = showError
         self.directoryDidChange = directoryDidChange
+        self.setDirectoryLoadingVisible = setDirectoryLoadingVisible
+        self.makeSnapshot = makeSnapshot
     }
 
     var hasRecentDirectoryHistory: Bool {
@@ -113,38 +160,121 @@ final class FileManagerPaneDirectoryCoordinator {
 
     @discardableResult
     func loadDirectory(_ url: URL,
-                       showError: Bool = true) -> Bool
+                       showError: Bool = true,
+                       budget: Duration? = nil) -> Bool
     {
         navigateToDirectory(url,
-                            showError: showError)
+                            showError: showError,
+                            budget: budget)
     }
 
     @discardableResult
     func navigateToDirectory(_ url: URL,
                              showError: Bool,
                              selectionState: FileManagerFileSystemSelectionState? = nil,
-                             focusAfterLoad: Bool = false) -> Bool
+                             focusAfterLoad: Bool = false,
+                             budget: Duration? = nil) -> Bool
     {
         cancelPendingSnapshot()
+        setDirectoryLoadingVisible(false)
 
+        let standardizedURL = url.standardizedFileURL
+
+        guard let budget else {
+            return navigateSynchronously(to: standardizedURL,
+                                         showError: showError,
+                                         selectionState: selectionState,
+                                         focusAfterLoad: focusAfterLoad)
+        }
+
+        return navigateWithinBudget(to: standardizedURL,
+                                    showError: showError,
+                                    selectionState: selectionState,
+                                    focusAfterLoad: focusAfterLoad,
+                                    budget: budget)
+    }
+
+    private func navigateSynchronously(to url: URL,
+                                       showError: Bool,
+                                       selectionState: FileManagerFileSystemSelectionState?,
+                                       focusAfterLoad: Bool) -> Bool
+    {
         do {
-            let snapshot = try FileManagerDirectorySnapshot.make(for: url.standardizedFileURL,
-                                                                 options: directoryEnumerationOptions())
-            applyDirectorySnapshot(snapshot)
-            clearSuspendedState()
-            if let selectionState {
-                restoreSelectionState(selectionState)
-            }
-            if focusAfterLoad {
-                focusFileList()
-            }
-            return true
+            let snapshot = try makeSnapshot(url, directoryEnumerationOptions())
+            return applyNavigationSnapshot(snapshot,
+                                           selectionState: selectionState,
+                                           focusAfterLoad: focusAfterLoad)
         } catch {
             if showError {
                 self.showError(error)
             }
             return false
         }
+    }
+
+    private func navigateWithinBudget(to url: URL,
+                                      showError: Bool,
+                                      selectionState: FileManagerFileSystemSelectionState?,
+                                      focusAfterLoad: Bool,
+                                      budget: Duration) -> Bool
+    {
+        snapshotGeneration += 1
+        let generation = snapshotGeneration
+        let options = directoryEnumerationOptions()
+        let make = makeSnapshot
+        let box = FileManagerDirectorySnapshotBox()
+        let purpose = SnapshotPurpose.navigate(selectionState: selectionState,
+                                               focusAfterLoad: focusAfterLoad,
+                                               showError: showError)
+
+        snapshotQueue.async {
+            box.store(Result { try make(url, options) })
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.finishDirectorySnapshot(box.take(),
+                                                  generation: generation,
+                                                  purpose: purpose)
+                }
+            }
+        }
+
+        if box.ready.wait(timeout: .now() + budget.timeoutSeconds) == .success,
+           let result = box.take()
+        {
+            snapshotGeneration += 1
+            switch result {
+            case let .success(snapshot):
+                return applyNavigationSnapshot(snapshot,
+                                               selectionState: selectionState,
+                                               focusAfterLoad: focusAfterLoad)
+            case let .failure(error):
+                if showError {
+                    self.showError(error)
+                }
+                return false
+            }
+        }
+
+        setDirectoryLoadingVisible(true)
+        return true
+    }
+
+    @discardableResult
+    private func applyNavigationSnapshot(_ snapshot: FileManagerDirectorySnapshot,
+                                         selectionState: FileManagerFileSystemSelectionState?,
+                                         focusAfterLoad: Bool) -> Bool
+    {
+        guard !isInsideArchive() else { return false }
+
+        applyDirectorySnapshot(snapshot)
+        clearSuspendedState()
+        if let selectionState {
+            restoreSelectionState(selectionState)
+        }
+        if focusAfterLoad {
+            focusFileList()
+        }
+        return true
     }
 
     func reloadCurrentDirectoryPreservingSelection() {
@@ -159,8 +289,7 @@ final class FileManagerPaneDirectoryCoordinator {
 
     func loadInitialDirectory(_ url: URL) {
         do {
-            let snapshot = try FileManagerDirectorySnapshot.make(for: url.standardizedFileURL,
-                                                                 options: directoryEnumerationOptions())
+            let snapshot = try makeSnapshot(url.standardizedFileURL, directoryEnumerationOptions())
             applyDirectorySnapshot(snapshot)
         } catch {
             currentDirectory = url.standardizedFileURL
@@ -244,11 +373,11 @@ final class FileManagerPaneDirectoryCoordinator {
         snapshotGeneration += 1
         let generation = snapshotGeneration
         let options = directoryEnumerationOptions()
+        let make = makeSnapshot
 
         snapshotQueue.async {
             let result = Result {
-                try FileManagerDirectorySnapshot.make(for: url,
-                                                      options: options)
+                try make(url, options)
             }
 
             DispatchQueue.main.async { [weak self] in
@@ -265,31 +394,38 @@ final class FileManagerPaneDirectoryCoordinator {
         snapshotGeneration += 1
     }
 
-    private func finishDirectorySnapshot(_ result: Result<FileManagerDirectorySnapshot, Error>,
+    private func finishDirectorySnapshot(_ result: Result<FileManagerDirectorySnapshot, Error>?,
                                          generation: Int,
                                          purpose: SnapshotPurpose)
     {
-        guard generation == snapshotGeneration else { return }
+        guard generation == snapshotGeneration, let result else { return }
 
-        switch result {
-        case let .success(snapshot):
-            guard !isInsideArchive() else { return }
-
-            switch purpose {
-            case let .autoRefresh(selectionState):
-                guard snapshot.url.standardizedFileURL == currentDirectory.standardizedFileURL else { return }
-                guard stableSnapshotItems(snapshot.items) != stableSnapshotItems(items) else { return }
-                applyDirectorySnapshot(snapshot, recordVisit: false)
-                restoreSelectionState(selectionState)
-
-            case let .refresh(selectionState):
-                guard snapshot.url.standardizedFileURL == currentDirectory.standardizedFileURL else { return }
-                applyDirectorySnapshot(snapshot, recordVisit: false)
-                restoreSelectionState(selectionState)
+        switch purpose {
+        case let .navigate(selectionState, focusAfterLoad, showError):
+            setDirectoryLoadingVisible(false)
+            switch result {
+            case let .success(snapshot):
+                applyNavigationSnapshot(snapshot,
+                                        selectionState: selectionState,
+                                        focusAfterLoad: focusAfterLoad)
+            case let .failure(error):
+                if showError {
+                    self.showError(error)
+                }
             }
 
-        case .failure:
-            return
+        case let .autoRefresh(selectionState):
+            guard case let .success(snapshot) = result, !isInsideArchive() else { return }
+            guard snapshot.url.standardizedFileURL == currentDirectory.standardizedFileURL else { return }
+            guard stableSnapshotItems(snapshot.items) != stableSnapshotItems(items) else { return }
+            applyDirectorySnapshot(snapshot, recordVisit: false)
+            restoreSelectionState(selectionState)
+
+        case let .refresh(selectionState):
+            guard case let .success(snapshot) = result, !isInsideArchive() else { return }
+            guard snapshot.url.standardizedFileURL == currentDirectory.standardizedFileURL else { return }
+            applyDirectorySnapshot(snapshot, recordVisit: false)
+            restoreSelectionState(selectionState)
         }
     }
 
