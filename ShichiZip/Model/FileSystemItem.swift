@@ -56,6 +56,31 @@ final class FileSystemItem: Sendable {
         links = status.map { UInt64($0.st_nlink) }
     }
 
+    /// Builds the same fields as `init(url:resourceValues:)` from a
+    /// `getattrlistbulk(2)` record, so both initializers produce equivalent items.
+    init(url: URL, bulkEntry: BulkDirectoryEntry) {
+        self.url = url
+        name = url.lastPathComponent
+        isHidden = bulkEntry.flags & UInt32(UF_HIDDEN) != 0 || HiddenItemVisibility.isHiddenName(name)
+
+        if bulkEntry.isSymbolicLink {
+            isDirectory = (try? url.resolvingSymlinksInPath()
+                .resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        } else {
+            isDirectory = bulkEntry.isDirectory
+        }
+
+        size = UInt64(max(0, bulkEntry.dataLength))
+        packedSize = UInt64(max(0, bulkEntry.allocatedSize))
+        modifiedDate = Self.date(from: bulkEntry.modifiedTime)
+        createdDate = Self.date(from: bulkEntry.createdTime)
+        accessedDate = Self.date(from: bulkEntry.accessedTime)
+        changedDate = Self.date(from: bulkEntry.changedTime)
+        attributes = 0x8000 | ((bulkEntry.mode & 0xFFFF) << 16)
+        inode = bulkEntry.inode
+        links = UInt64(bulkEntry.linkCount)
+    }
+
     var formattedSize: String {
         if isDirectory { return "--" }
         return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
@@ -87,7 +112,12 @@ final class FileSystemItem: Sendable {
     }
 
     private static func date(from timeSpec: timespec) -> Date {
-        Date(timeIntervalSince1970: TimeInterval(timeSpec.tv_sec) + TimeInterval(timeSpec.tv_nsec) / 1_000_000_000)
+        // Match CoreFoundation's own timespec→Date conversion (subtract the 1970
+        // epoch before adding the sub-second term, and multiply rather than
+        // divide) so these dates equal the ones Foundation derives for the same
+        // timestamps.
+        let secondsSinceReference = TimeInterval(timeSpec.tv_sec) - Date.timeIntervalBetween1970AndReferenceDate
+        return Date(timeIntervalSinceReferenceDate: secondsSinceReference + 1e-9 * TimeInterval(timeSpec.tv_nsec))
     }
 }
 

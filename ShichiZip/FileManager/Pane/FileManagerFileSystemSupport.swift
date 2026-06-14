@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct FileManagerDirectoryListingEntry {
@@ -22,15 +23,7 @@ enum FileManagerDirectoryListing {
     static func entriesPreservingPresentedPath(for url: URL,
                                                fileManager: FileManager = .default) throws -> [FileManagerDirectoryListingEntry]
     {
-        let resourceValues = try url.resourceValues(forKeys: Self.resourceKeys)
-        let listingURL: URL = if resourceValues.isSymbolicLink == true,
-                                 let resolvedIsDirectory = try url.resolvingSymlinksInPath().resourceValues(forKeys: [.isDirectoryKey]).isDirectory,
-                                 resolvedIsDirectory
-        {
-            url.resolvingSymlinksInPath()
-        } else {
-            url
-        }
+        let listingURL = try listingURL(for: url)
 
         let contents = try fileManager.contentsOfDirectory(
             at: listingURL,
@@ -56,6 +49,21 @@ enum FileManagerDirectoryListing {
             )
         }
     }
+
+    /// The directory to actually enumerate: a symbolic link that points at a
+    /// directory is followed to its target while children stay presented under
+    /// the original `url`.
+    static func listingURL(for url: URL) throws -> URL {
+        let isSymbolicLink = try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink ?? false
+        guard isSymbolicLink,
+              let resolvedIsDirectory = try url.resolvingSymlinksInPath()
+              .resourceValues(forKeys: [.isDirectoryKey]).isDirectory,
+              resolvedIsDirectory
+        else {
+            return url
+        }
+        return url.resolvingSymlinksInPath()
+    }
 }
 
 struct FileManagerDirectorySnapshot {
@@ -63,13 +71,43 @@ struct FileManagerDirectorySnapshot {
     let items: [FileSystemItem]
 
     static func make(for url: URL) throws -> FileManagerDirectorySnapshot {
-        let entries = try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: url)
-        let items = entries.map { entry in
-            FileSystemItem(url: entry.url, resourceValues: entry.resourceValues)
+        // A single getattrlistbulk(2) sweep describes the whole directory; the
+        // per-item path is the fallback when bulk enumeration is unavailable or
+        // fails, and surfaces a meaningful error if the directory is unreadable.
+        if let items = try? bulkItems(for: url) {
+            return FileManagerDirectorySnapshot(url: url, items: items)
         }
+        return try FileManagerDirectorySnapshot(url: url, items: legacyItems(for: url))
+    }
 
-        return FileManagerDirectorySnapshot(url: url,
-                                            items: items)
+    static func bulkItems(for url: URL) throws -> [FileSystemItem] {
+        let listingURL = try FileManagerDirectoryListing.listingURL(for: url)
+
+        // `contentsOfDirectory` reports children under the directory's canonical
+        // path, with firmlinks resolved (e.g. `/var` → `/private/var`). `realpath`
+        // performs the same resolution, which `URL.resolvingSymlinksInPath` does
+        // not. Match it when listing a directory directly; keep children under the
+        // original path when following a symbolic link.
+        let base = listingURL == url ? canonicalDirectoryURL(url) : url
+
+        return try DirectoryBulkEnumerator.entries(atDirectory: listingURL).map { entry in
+            let childURL = base.appendingPathComponent(entry.name, isDirectory: entry.isDirectory)
+            return FileSystemItem(url: childURL, bulkEntry: entry)
+        }
+    }
+
+    static func legacyItems(for url: URL) throws -> [FileSystemItem] {
+        try FileManagerDirectoryListing.entriesPreservingPresentedPath(for: url)
+            .map { FileSystemItem(url: $0.url, resourceValues: $0.resourceValues) }
+    }
+
+    private static func canonicalDirectoryURL(_ url: URL) -> URL {
+        url.withUnsafeFileSystemRepresentation { pointer in
+            guard let pointer else { return url }
+            var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+            guard let resolved = realpath(pointer, &buffer) else { return url }
+            return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
+        }
     }
 }
 
