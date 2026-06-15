@@ -445,12 +445,6 @@ final class QuickActionTransportTests: XCTestCase {
             DocumentTypeExpectation(fileExtension: "chm",
                                     iconFile: "archive",
                                     contentTypes: ["com.microsoft.chm"]),
-            DocumentTypeExpectation(fileExtension: "mdf",
-                                    iconFile: "archive",
-                                    contentTypes: ["com.alcohol-soft.mdf-disk-image"]),
-            DocumentTypeExpectation(fileExtension: "mds",
-                                    iconFile: "archive",
-                                    contentTypes: ["com.alcohol-soft.mds-disk-image"]),
         ]
     }
 
@@ -469,14 +463,6 @@ final class QuickActionTransportTests: XCTestCase {
                                     typeDescription: "Compiled HTML Help",
                                     fileExtension: "chm",
                                     conformsTo: ["public.data"]),
-            ImportedTypeExpectation(identifier: "com.alcohol-soft.mdf-disk-image",
-                                    typeDescription: "MDF Disk Image",
-                                    fileExtension: "mdf",
-                                    conformsTo: ["public.disk-image", "public.data"]),
-            ImportedTypeExpectation(identifier: "com.alcohol-soft.mds-disk-image",
-                                    typeDescription: "MDS Disk Image",
-                                    fileExtension: "mds",
-                                    conformsTo: ["public.disk-image", "public.data"]),
         ]
     }
 }

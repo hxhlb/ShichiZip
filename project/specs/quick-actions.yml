@@ -234,8 +234,6 @@ targets:
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.apple.disk-image-smi" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.iso-image" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.apple.disk-image-udif" ||
-              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.alcohol-soft.mdf-disk-image" ||
-              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.alcohol-soft.mds-disk-image" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "org.debian.deb-archive" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.microsoft.chm" ||
               ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.archive.lha" ||

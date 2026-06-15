@@ -742,46 +742,6 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>MDF Disk Image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>archive</string>
-			<key>NSDocumentClass</key>
-			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>mdf</string>
-			</array>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>com.alcohol-soft.mdf-disk-image</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeName</key>
-			<string>MDS Disk Image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>archive</string>
-			<key>NSDocumentClass</key>
-			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>mds</string>
-			</array>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>com.alcohol-soft.mds-disk-image</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeName</key>
 			<string>LHA Archive</string>
 			<key>CFBundleTypeIconFile</key>
 			<string>archive</string>
@@ -1223,42 +1183,6 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>chm</string>
-				</array>
-			</dict>
-		</dict>
-		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.alcohol-soft.mdf-disk-image</string>
-			<key>UTTypeDescription</key>
-			<string>MDF Disk Image</string>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.disk-image</string>
-				<string>public.data</string>
-			</array>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>mdf</string>
-				</array>
-			</dict>
-		</dict>
-		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.alcohol-soft.mds-disk-image</string>
-			<key>UTTypeDescription</key>
-			<string>MDS Disk Image</string>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.disk-image</string>
-				<string>public.data</string>
-			</array>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>mds</string>
 				</array>
 			</dict>
 		</dict>
