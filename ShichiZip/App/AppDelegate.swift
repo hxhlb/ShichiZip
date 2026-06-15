@@ -123,13 +123,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, FileManagerDocumentOpenRouti
         return true
     }
 
-    /// Handle files dropped onto dock icon
-    func application(_: NSApplication, openFiles filenames: [String]) {
-        launchOpenCoordinator.noteLaunchOpenDelivered()
-        let urls = filenames.map { URL(fileURLWithPath: $0) }
-        presentLaunchOpenHUD(for: urls)
-    }
-
     func application(_: NSApplication, open urls: [URL]) {
         launchOpenCoordinator.noteLaunchOpenDelivered()
 
