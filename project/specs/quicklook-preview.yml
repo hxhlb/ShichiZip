@@ -133,6 +133,11 @@ targets:
               - com.apple.disk-image
               - com.apple.disk-image-smi
               - public.iso-image
+              - com.apple.disk-image-udif
+              - com.alcohol-soft.mdf-disk-image
+              - com.alcohol-soft.mds-disk-image
+              - org.debian.deb-archive
+              - com.microsoft.chm
               - public.archive.lha
               - com.microsoft.windows-executable
               - com.microsoft.cab-archive
