@@ -682,6 +682,66 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>UDIF Disk Image</string>
+			<key>CFBundleTypeIconFile</key>
+			<string>diskimg</string>
+			<key>NSDocumentClass</key>
+			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>udif</string>
+			</array>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apple.disk-image-udif</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Debian Package Archive</string>
+			<key>CFBundleTypeIconFile</key>
+			<string>archive</string>
+			<key>NSDocumentClass</key>
+			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>deb</string>
+			</array>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.debian.deb-archive</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Compiled HTML Help</string>
+			<key>CFBundleTypeIconFile</key>
+			<string>archive</string>
+			<key>NSDocumentClass</key>
+			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>chm</string>
+			</array>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.microsoft.chm</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>LHA Archive</string>
 			<key>CFBundleTypeIconFile</key>
 			<string>archive</string>
@@ -1088,6 +1148,42 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>zipx</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>org.debian.deb-archive</string>
+			<key>UTTypeDescription</key>
+			<string>Debian Package Archive</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>deb</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.microsoft.chm</string>
+			<key>UTTypeDescription</key>
+			<string>Compiled HTML Help</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>chm</string>
 				</array>
 			</dict>
 		</dict>
