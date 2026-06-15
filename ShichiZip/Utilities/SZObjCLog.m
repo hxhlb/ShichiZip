@@ -1,5 +1,6 @@
 #import "SZObjCLog.h"
 
+#import <os/lock.h>
 #import <os/log.h>
 
 typedef NS_ENUM(NSUInteger, SZObjCLogKind) {
@@ -18,7 +19,22 @@ static NSString* SZObjCLogSubsystem(void) {
 }
 
 static os_log_t SZObjCUnifiedLog(NSString* prefix) {
-    return os_log_create(SZObjCLogSubsystem().UTF8String, prefix.UTF8String);
+    static NSMutableDictionary<NSString*, os_log_t>* cache;
+    static os_unfair_lock cacheLock = OS_UNFAIR_LOCK_INIT;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [NSMutableDictionary dictionary];
+    });
+
+    NSString* category = prefix ?: @"";
+    os_unfair_lock_lock(&cacheLock);
+    os_log_t log = cache[category];
+    if (!log) {
+        log = os_log_create(SZObjCLogSubsystem().UTF8String, category.UTF8String);
+        cache[category] = log;
+    }
+    os_unfair_lock_unlock(&cacheLock);
+    return log;
 }
 
 static void SZObjCWriteUnifiedLog(NSString* prefix,

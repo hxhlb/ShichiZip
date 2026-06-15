@@ -1,7 +1,10 @@
 import Foundation
+import os
 import OSLog
 
 enum SZLog {
+    private static let loggers = OSAllocatedUnfairLock<[String: Logger]>(initialState: [:])
+
     static func debug(_ prefix: String, _ message: @autoclosure () -> String) {
         #if DEBUG
             let resolvedMessage = message()
@@ -32,7 +35,7 @@ enum SZLog {
                                           level: OSLogType,
                                           includePrivateData: Bool)
     {
-        let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ShichiZip", category: prefix)
+        let logger = unifiedLogger(for: prefix)
 
         switch level {
         case .debug:
@@ -53,6 +56,17 @@ enum SZLog {
             } else {
                 logger.info("\(message, privacy: .public)")
             }
+        }
+    }
+
+    private static func unifiedLogger(for prefix: String) -> Logger {
+        loggers.withLock { cache in
+            if let existing = cache[prefix] {
+                return existing
+            }
+            let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ShichiZip", category: prefix)
+            cache[prefix] = logger
+            return logger
         }
     }
 }
