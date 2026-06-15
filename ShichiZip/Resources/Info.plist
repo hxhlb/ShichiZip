@@ -684,7 +684,7 @@
 			<key>CFBundleTypeName</key>
 			<string>UDIF Disk Image</string>
 			<key>CFBundleTypeIconFile</key>
-			<string>archive</string>
+			<string>diskimg</string>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).ArchiveDocument</string>
 			<key>CFBundleTypeRole</key>
@@ -1177,6 +1177,7 @@
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
+				<string>public.archive</string>
 			</array>
 			<key>UTTypeTagSpecification</key>
 			<dict>

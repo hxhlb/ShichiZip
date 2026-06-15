@@ -437,7 +437,7 @@ final class QuickActionTransportTests: XCTestCase {
                                     iconFile: "diskimg",
                                     contentTypes: ["public.iso-image"]),
             DocumentTypeExpectation(fileExtension: "udif",
-                                    iconFile: "archive",
+                                    iconFile: "diskimg",
                                     contentTypes: ["com.apple.disk-image-udif"]),
             DocumentTypeExpectation(fileExtension: "deb",
                                     iconFile: "archive",
@@ -462,7 +462,7 @@ final class QuickActionTransportTests: XCTestCase {
             ImportedTypeExpectation(identifier: "com.microsoft.chm",
                                     typeDescription: "Compiled HTML Help",
                                     fileExtension: "chm",
-                                    conformsTo: ["public.data"]),
+                                    conformsTo: ["public.data", "public.archive"]),
         ]
     }
 }
