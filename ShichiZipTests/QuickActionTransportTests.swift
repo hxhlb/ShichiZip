@@ -27,6 +27,88 @@ final class QuickActionTransportTests: XCTestCase {
         super.tearDown()
     }
 
+    func testInfoPlistRegistersAdditionalArchiveAndDiskImageFileTypes() throws {
+        let infoPlist = try loadSourceInfoPlist()
+        let documentTypes = try XCTUnwrap(infoPlist["CFBundleDocumentTypes"] as? [[String: Any]])
+        let importedTypes = try XCTUnwrap(infoPlist["UTImportedTypeDeclarations"] as? [[String: Any]])
+        let importedTypeIdentifiers = importedTypes.compactMap { $0["UTTypeIdentifier"] as? String }
+        XCTAssertEqual(importedTypeIdentifiers.count, Set(importedTypeIdentifiers).count)
+
+        var importedTypesByIdentifier: [String: [String: Any]] = [:]
+        for importedType in importedTypes {
+            guard let identifier = importedType["UTTypeIdentifier"] as? String else {
+                continue
+            }
+
+            importedTypesByIdentifier[identifier] = importedType
+        }
+
+        let knownSystemContentTypes: Set<String> = [
+            "com.android.package-archive",
+            "com.apple.archive",
+            "com.apple.bom-compressed-cpio",
+            "com.apple.disk-image",
+            "com.apple.disk-image-smi",
+            "com.apple.disk-image-udif",
+            "com.apple.encrypted-archive",
+            "com.apple.iTunes.ipa",
+            "com.apple.xar-archive",
+            "com.microsoft.windows-executable",
+            "com.sun.java-archive",
+            "org.gnu.gnu-zip-archive",
+            "public.bzip2-archive",
+            "public.cpio-archive",
+            "public.iso-image",
+            "public.tar-archive",
+            "public.zip-archive",
+        ]
+        let referencedContentTypes = Set(documentTypes.flatMap { documentType in
+            documentType["LSItemContentTypes"] as? [String] ?? []
+        })
+        let danglingContentTypes = referencedContentTypes.filter { contentType in
+            !knownSystemContentTypes.contains(contentType) && importedTypesByIdentifier[contentType] == nil
+        }.sorted()
+        XCTAssertTrue(danglingContentTypes.isEmpty,
+                      "Dangling LSItemContentTypes: \(danglingContentTypes.joined(separator: ", "))")
+
+        for expectation in DocumentTypeExpectation.registeredArchiveAndDiskImageTypes {
+            let matchingDocumentTypes = documentTypes.filter { documentType in
+                let extensions = documentType["CFBundleTypeExtensions"] as? [String] ?? []
+                return extensions.contains(expectation.fileExtension)
+            }
+            XCTAssertEqual(matchingDocumentTypes.count,
+                           1,
+                           "Expected exactly one document type for .\(expectation.fileExtension)")
+
+            let documentType = try XCTUnwrap(matchingDocumentTypes.first)
+            XCTAssertEqual(documentType["CFBundleTypeIconFile"] as? String, expectation.iconFile)
+            XCTAssertEqual(documentType["NSDocumentClass"] as? String, "$(PRODUCT_MODULE_NAME).ArchiveDocument")
+            XCTAssertEqual(documentType["CFBundleTypeRole"] as? String, "Viewer")
+            XCTAssertEqual(documentType["LSHandlerRank"] as? String, "Alternate")
+
+            let contentTypes = try XCTUnwrap(documentType["LSItemContentTypes"] as? [String])
+            XCTAssertEqual(contentTypes, expectation.contentTypes)
+            XCTAssertFalse(contentTypes.isEmpty)
+
+            for contentType in contentTypes where !knownSystemContentTypes.contains(contentType) {
+                XCTAssertNotNil(importedTypesByIdentifier[contentType],
+                                "\(contentType) must be declared in UTImportedTypeDeclarations")
+            }
+        }
+
+        for expectation in ImportedTypeExpectation.additionalArchiveAndDiskImageTypes {
+            let importedType = try XCTUnwrap(importedTypesByIdentifier[expectation.identifier])
+            XCTAssertEqual(importedType["UTTypeDescription"] as? String, expectation.typeDescription)
+
+            let conformsTo = try XCTUnwrap(importedType["UTTypeConformsTo"] as? [String])
+            XCTAssertEqual(Set(conformsTo), Set(expectation.conformsTo))
+
+            let tagSpecification = try XCTUnwrap(importedType["UTTypeTagSpecification"] as? [String: Any])
+            XCTAssertEqual(tagSpecification["public.filename-extension"] as? [String],
+                           [expectation.fileExtension])
+        }
+    }
+
     @MainActor
     func testDeliveredQuickActionLaunchDoesNotKeepProcessAliveWhenLaunchNotificationArrivesLater() {
         let coordinator = LaunchOpenCoordinator()
@@ -331,5 +413,70 @@ final class QuickActionTransportTests: XCTestCase {
         (try? FileManager.default.contentsOfDirectory(at: requestDirectoryURL,
                                                       includingPropertiesForKeys: nil,
                                                       options: [])) ?? []
+    }
+
+    private func loadSourceInfoPlist() throws -> [String: Any] {
+        let infoPlistURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ShichiZip/Resources/Info.plist")
+        let infoPlistData = try Data(contentsOf: infoPlistURL)
+        let propertyList = try PropertyListSerialization.propertyList(from: infoPlistData,
+                                                                      options: [],
+                                                                      format: nil)
+        return try XCTUnwrap(propertyList as? [String: Any])
+    }
+
+    private struct DocumentTypeExpectation {
+        let fileExtension: String
+        let iconFile: String
+        let contentTypes: [String]
+
+        static let registeredArchiveAndDiskImageTypes = [
+            DocumentTypeExpectation(fileExtension: "iso",
+                                    iconFile: "diskimg",
+                                    contentTypes: ["public.iso-image"]),
+            DocumentTypeExpectation(fileExtension: "udif",
+                                    iconFile: "archive",
+                                    contentTypes: ["com.apple.disk-image-udif"]),
+            DocumentTypeExpectation(fileExtension: "deb",
+                                    iconFile: "archive",
+                                    contentTypes: ["org.debian.deb-archive"]),
+            DocumentTypeExpectation(fileExtension: "chm",
+                                    iconFile: "archive",
+                                    contentTypes: ["com.microsoft.chm"]),
+            DocumentTypeExpectation(fileExtension: "mdf",
+                                    iconFile: "archive",
+                                    contentTypes: ["com.alcohol-soft.mdf-disk-image"]),
+            DocumentTypeExpectation(fileExtension: "mds",
+                                    iconFile: "archive",
+                                    contentTypes: ["com.alcohol-soft.mds-disk-image"]),
+        ]
+    }
+
+    private struct ImportedTypeExpectation {
+        let identifier: String
+        let typeDescription: String
+        let fileExtension: String
+        let conformsTo: [String]
+
+        static let additionalArchiveAndDiskImageTypes = [
+            ImportedTypeExpectation(identifier: "org.debian.deb-archive",
+                                    typeDescription: "Debian Package Archive",
+                                    fileExtension: "deb",
+                                    conformsTo: ["public.data", "public.archive"]),
+            ImportedTypeExpectation(identifier: "com.microsoft.chm",
+                                    typeDescription: "Compiled HTML Help",
+                                    fileExtension: "chm",
+                                    conformsTo: ["public.data"]),
+            ImportedTypeExpectation(identifier: "com.alcohol-soft.mdf-disk-image",
+                                    typeDescription: "MDF Disk Image",
+                                    fileExtension: "mdf",
+                                    conformsTo: ["public.disk-image", "public.data"]),
+            ImportedTypeExpectation(identifier: "com.alcohol-soft.mds-disk-image",
+                                    typeDescription: "MDS Disk Image",
+                                    fileExtension: "mds",
+                                    conformsTo: ["public.disk-image", "public.data"]),
+        ]
     }
 }
