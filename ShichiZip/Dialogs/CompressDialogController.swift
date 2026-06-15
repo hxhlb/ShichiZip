@@ -79,25 +79,6 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
 
     private static let knownArchiveExtensions: Set<String> = ["7z", "zip", "tar", "gz", "gzip", "bz2", "bzip2", "xz", "wim", "zst", "zstd", "br", "brotli", "liz", "lz4", "lz5", "exe"]
 
-    static func compressionEnumValue(for levelValue: Int) -> SZCompressionLevel {
-        if levelValue == 0 {
-            return .store
-        }
-        if levelValue < 0 || levelValue <= 1 {
-            return .fastest
-        }
-        if levelValue <= 4 {
-            return .fast
-        }
-        if levelValue <= 6 {
-            return .normal
-        }
-        if levelValue <= 8 {
-            return .maximum
-        }
-        return .ultra
-    }
-
     private let sourceURLs: [URL]
     private let baseDirectory: URL
     private let messageText: String?
@@ -800,7 +781,6 @@ final class CompressDialogController: NSObject, NSTextFieldDelegate, NSComboBoxD
     {
         let settings = SZCompressionSettings()
         settings.format = format.format
-        settings.level = Self.compressionEnumValue(for: level)
         settings.levelValue = level
         settings.method = method?.enumValue ?? .LZMA2
         settings.methodName = method?.methodName

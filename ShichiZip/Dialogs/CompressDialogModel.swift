@@ -73,7 +73,6 @@ extension CompressDialogController {
                                                           state.encryption)
             let settings = SZCompressionSettings()
             settings.format = state.format.format
-            settings.level = CompressDialogController.compressionEnumValue(for: state.level)
             settings.levelValue = state.level
             settings.method = state.method?.enumValue ?? .LZMA2
             settings.methodName = state.method?.methodName

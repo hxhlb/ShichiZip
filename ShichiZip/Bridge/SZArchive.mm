@@ -48,8 +48,7 @@
 - (instancetype)init {
     if ((self = [super init])) {
         _format = SZArchiveFormat7z;
-        _level = SZCompressionLevelNormal;
-        _levelValue = SZCompressionLevelNormal;
+        _levelValue = 5; // Normal
         _method = SZCompressionMethodLZMA2;
         _encryption = SZEncryptionMethodNone;
         _updateMode = SZCompressionUpdateModeAdd;
